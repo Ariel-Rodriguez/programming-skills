@@ -1,0 +1,77 @@
+name: Build and Release Skills
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Skills (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [cursor-antigravity, copilot]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build package
+        run: |
+          chmod +x ci/release.sh
+          ./ci/release.sh ${{ matrix.platform }}
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: ${{ matrix.platform }}.zip
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Collect artifacts
+        run: |
+          chmod +x ci/collect-artifacts.sh
+          ./ci/collect-artifacts.sh
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true
+          body: |
+            ## 📦 Installation
+            
+            **One-line install:**
+            ```bash
+            # Linux/macOS - Cursor/Antigravity
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/cursor-antigravity.zip -o skills.zip && unzip skills.zip -d .cursor/skills && rm skills.zip
+            
+            # Windows (PowerShell)
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/cursor-antigravity.zip" -OutFile "skills.zip"; Expand-Archive -Path "skills.zip" -DestinationPath ".cursor\skills" -Force; Remove-Item "skills.zip"
+            ```
+            
+            **Available packages:**
+            - `cursor-antigravity.zip` - For Cursor & Antigravity
+            - `copilot.zip` - For GitHub Copilot
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
