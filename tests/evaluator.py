@@ -119,9 +119,9 @@ def generate_test_cases(skill: Skill, verbose: bool = False) -> list[dict]:
                             if external_file.exists() and external_file.is_file():
                                 if verbose:
                                     print(f"    [INFO] Loading external input from {input_val}")
-                                # Replace the filename with its content, but keep a label without the path
                                 file_content = external_file.read_text(encoding='utf-8')
-                                test['input'] = f"CODE CONTENT ({input_val}):\n\n{file_content}"
+                                # Replace the filename placeholder with the actual content
+                                test['input'] = test['input'].replace(input_val, f"\n```javascript\n{file_content}\n```\n")
                     
                     return raw_tests
             except Exception as e:

@@ -10,8 +10,8 @@
             ],
             "excludes": [
                 "class PaymentProcessor",
-                "Manager",
-                "Orchestrator"
+                "Orchestrator {",
+                "Manager {"
             ],
             "regex": [
                 "(function|const)\\s+(validate|auth|bank|db|notify)",
@@ -28,11 +28,10 @@
                 "god object",
                 "tight coupling",
                 "unmaintainable",
-                "bottleneck"
-            ],
-            "includes": [
-                "subsystem",
-                "responsibility"
+                "bottleneck",
+                "Single Responsibility",
+                "separation of concerns",
+                "subsystem"
             ],
             "min_length": 150
         }
