@@ -4,6 +4,7 @@ GitHub Copilot CLI Adapter
 Imperative Shell: Subprocess calls isolated here.
 """
 
+import os
 import subprocess
 from domain import ModelConfig, Result, Success, Failure
 
@@ -31,12 +32,16 @@ class CopilotCLIAdapter:
         ]
         
         try:
+            # Pass environment variables including GITHUB_TOKEN
+            env = os.environ.copy()
+            
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
-                timeout=300
+                timeout=300,
+                env=env  # Explicitly pass environment
             )
             
             if result.returncode != 0:
