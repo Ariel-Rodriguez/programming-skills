@@ -19,7 +19,7 @@ MODIFIED_FILES=$(gh pr diff "$PR_NUMBER" --name-only)
 MODIFIED_SKILLS=$(echo "$MODIFIED_FILES" | grep '^skills/' | cut -d'/' -f2 | sort -u | xargs)
 
 # Build command array
-CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment")
+CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge")
 
 if [ -n "$MODIFIED_SKILLS" ]; then
     echo "Detected modified skills: $MODIFIED_SKILLS"
