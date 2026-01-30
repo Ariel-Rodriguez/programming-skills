@@ -6,13 +6,14 @@ set -e
 
 PR_NUMBER=$1
 THRESHOLD=${2:-50}
+PROVIDER=${3:-"ollama"}  # Default to ollama
 
 if [ -z "$PR_NUMBER" ]; then
     echo "Error: PR number not provided."
     exit 1
 fi
 
-# Ensure GITHUB_TOKEN is available for subprocess
+# Ensure GitHub tokens are available
 if [ -n "$GITHUB_TOKEN" ]; then
     export GITHUB_TOKEN
     export COPILOT_GITHUB_TOKEN="$GITHUB_TOKEN"
@@ -28,8 +29,20 @@ echo "Checking for modified skills in PR #$PR_NUMBER..."
 MODIFIED_FILES=$(gh pr diff "$PR_NUMBER" --name-only)
 MODIFIED_SKILLS=$(echo "$MODIFIED_FILES" | grep '^skills/' | cut -d'/' -f2 | sort -u | xargs)
 
-# Build command array
-CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+# Build command based on provider
+if [ "$PROVIDER" = "ollama" ]; then
+    echo "Using Ollama Cloud (deepseek-v3.1 - good for coding)"
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+elif [ "$PROVIDER" = "copilot" ]; then
+    echo "Using Copilot CLI (claude-sonnet-4.5)"
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+elif [ "$PROVIDER" = "all" ]; then
+    echo "Testing with all providers (not yet implemented - using ollama)"
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+else
+    echo "Unknown provider: $PROVIDER (using ollama)"
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+fi
 
 if [ -n "$MODIFIED_SKILLS" ]; then
     echo "Detected modified skills: $MODIFIED_SKILLS"

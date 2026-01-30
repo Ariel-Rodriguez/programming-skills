@@ -14,6 +14,26 @@ jobs:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/test') && github.actor == 'Ariel-Rodriguez'
     
     steps:
+      - name: Parse test command
+        id: parse
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          
+          # Default provider
+          PROVIDER="ollama"
+          
+          # Check for specific provider
+          if echo "$COMMENT" | grep -q "/test copilot"; then
+            PROVIDER="copilot"
+          elif echo "$COMMENT" | grep -q "/test ollama"; then
+            PROVIDER="ollama"
+          elif echo "$COMMENT" | grep -q "/test all"; then
+            PROVIDER="all"
+          fi
+          
+          echo "provider=$PROVIDER" >> $GITHUB_OUTPUT
+          echo "Testing with provider: $PROVIDER"
+      
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -35,13 +55,14 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Run Skill Validation (Copilot)
+      - name: Run Skill Validation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           chmod +x ci/validate_skills.sh
-          ./ci/validate_skills.sh ${{ github.event.issue.number }} 50
+          ./ci/validate_skills.sh ${{ github.event.issue.number }} 50 ${{ steps.parse.outputs.provider }}
 
       - name: Post Benchmark Results
         uses: marocchino/sticky-pull-request-comment@v2

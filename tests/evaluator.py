@@ -63,6 +63,7 @@ def main() -> int:
     parser.add_argument("--github-comment", action="store_true", help="Generate comment.md for PRs")
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
+    parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
@@ -94,16 +95,28 @@ def main() -> int:
             print(f"Error generating comment: {result.error_message}")
             return 1
     
-    # Model configuration
+    # Model configuration with appropriate context windows
+    if provider == Provider.OLLAMA:
+        # Ollama models - use reasonable context size
+        # Skill guidance (~2KB) + Test prompt (~3KB) + Response (~5KB) = ~10KB
+        # Add buffer for reasoning models
+        num_ctx = 32000  # 32K is plenty for most tasks, works well with reasoning models
+    else:
+        # Copilot models have larger context windows
+        num_ctx = 64000
+    
     config = ModelConfig(
         provider=provider,
         model_name=model_name,
         base_url="http://localhost:11434/v1",
-        num_ctx=64000
+        num_ctx=num_ctx
     )
     
     # Select model adapter based on provider
-    model_port = OllamaAdapter() if provider == Provider.OLLAMA else CopilotCLIAdapter()
+    if provider == Provider.OLLAMA:
+        model_port = OllamaAdapter(use_cloud=args.ollama_cloud)
+    else:
+        model_port = CopilotCLIAdapter()
     
     # Discover skills
     all_skills = discover_skills(skills_dir, fs)
@@ -126,8 +139,12 @@ def main() -> int:
     # Check model availability
     if provider == Provider.OLLAMA:
         if not model_port.is_available(config):
-            print(f"Error: Ollama not running at {config.base_url}")
-            print("Start with: ollama serve")
+            if args.ollama_cloud:
+                print(f"Error: OLLAMA_API_KEY not set for cloud access")
+                print("Get your key at: https://ollama.com/settings/keys")
+            else:
+                print(f"Error: Ollama not running at {config.base_url}")
+                print("Start with: ollama serve")
             return 1
     
     # Create results directory

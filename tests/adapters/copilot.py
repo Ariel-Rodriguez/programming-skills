@@ -24,27 +24,49 @@ class CopilotCLIAdapter:
         Local Reasoning: All parameters explicit.
         Naming as Design: Clear this invokes external CLI.
         """
-        cmd = [
+        # Try new copilot CLI first, fall back to gh extension
+        # The standalone CLI has auth issues with PATs in CI (see: github/copilot-cli#355)
+        # So we use gh copilot extension which works better with GITHUB_TOKEN
+        cmd_new = [
             "copilot", 
             "-p", prompt,
             "--model", config.model_name,
             "--silent",
-            "--yolo",  # Enable all permissions for non-interactive mode
-            "--deny-tool", "write"  # Prevent file writes, force stdout output
+            "--yolo",
+            "--deny-tool", "write"
+        ]
+        
+        cmd_gh = [
+            "gh", "copilot", "suggest",
+            "--target", "shell",
+            prompt
         ]
         
         try:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
+            # Try gh copilot extension (better for CI with PATs)
             result = subprocess.run(
-                cmd,
+                cmd_gh,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
                 timeout=300,
-                env=env
+                env=env,
+                input="\n"  # Auto-select first option
             )
+            
+            # If gh copilot not available, try standalone copilot CLI
+            if result.returncode != 0 and "gh: unknown command" in result.stderr:
+                result = subprocess.run(
+                    cmd_new,
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    timeout=300,
+                    env=env
+                )
             
             if result.returncode != 0:
                 stderr = result.stderr.strip()

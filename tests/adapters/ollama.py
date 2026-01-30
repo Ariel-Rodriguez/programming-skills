@@ -2,9 +2,11 @@
 Ollama API Adapter
 
 Imperative Shell: HTTP calls isolated here.
+Supports both local Ollama and Ollama Cloud.
 """
 
 import json
+import os
 import urllib.request
 import urllib.error
 from domain import ModelConfig, Result, Success, Failure
@@ -12,11 +14,20 @@ from domain import ModelConfig, Result, Success, Failure
 
 class OllamaAdapter:
     """
-    Adapter for Ollama API.
+    Adapter for Ollama API (local or cloud).
     
     Explicit Boundaries: Isolates Ollama-specific logic.
     Error Handling Design: Network errors become Result types.
     """
+    
+    def __init__(self, use_cloud: bool = False):
+        """
+        Initialize adapter.
+        
+        Args:
+            use_cloud: Use Ollama Cloud instead of local instance
+        """
+        self.use_cloud = use_cloud
     
     def call(self, prompt: str, config: ModelConfig) -> Result:
         """
@@ -24,11 +35,28 @@ class OllamaAdapter:
         
         Local Reasoning: All parameters explicit, no hidden config.
         """
-        url = f"{config.base_url}/chat/completions"
+        # Determine base URL and headers
+        if self.use_cloud:
+            base_url = "https://ollama.com"
+            api_key = os.environ.get('OLLAMA_API_KEY')
+            if not api_key:
+                return Failure(
+                    "OLLAMA_API_KEY environment variable not set for cloud access",
+                    {"use_cloud": True}
+                )
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {api_key}'
+            }
+        else:
+            base_url = config.base_url
+            headers = {'Content-Type': 'application/json'}
+        
+        url = f"{base_url}/api/chat"
         data = {
             "model": config.model_name,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
+            "stream": False,
             "options": {"num_ctx": config.num_ctx}
         }
         
@@ -36,12 +64,12 @@ class OllamaAdapter:
             req = urllib.request.Request(
                 url,
                 data=json.dumps(data).encode('utf-8'),
-                headers={'Content-Type': 'application/json'},
+                headers=headers,
                 method='POST'
             )
             with urllib.request.urlopen(req, timeout=300) as response:
                 res = json.loads(response.read().decode('utf-8'))
-                content = res['choices'][0]['message']['content']
+                content = res['message']['content']
                 return Success(content)
         
         except urllib.error.HTTPError as e:
@@ -72,10 +100,13 @@ class OllamaAdapter:
     
     def is_available(self, config: ModelConfig) -> bool:
         """
-        Check if Ollama is running.
-        
-        Simple boolean check - availability is binary.
+        Check if Ollama is available.
         """
+        if self.use_cloud:
+            # For cloud, just check if API key is set
+            return os.environ.get('OLLAMA_API_KEY') is not None
+        
+        # For local, check if server is running
         try:
             host = config.base_url.replace('/v1', '')
             urllib.request.urlopen(f"{host}/api/tags", timeout=5)
