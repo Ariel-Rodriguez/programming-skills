@@ -35,6 +35,14 @@ class CopilotCLIAdapter:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
+            # Debug: Check if token exists
+            has_token = any(key in env for key in ['GITHUB_TOKEN', 'GH_TOKEN', 'COPILOT_GITHUB_TOKEN'])
+            if not has_token:
+                return Failure(
+                    "No GitHub token found in environment. Set GITHUB_TOKEN, GH_TOKEN, or COPILOT_GITHUB_TOKEN.",
+                    {"env_keys": list(env.keys())}
+                )
+            
             result = subprocess.run(
                 cmd,
                 capture_output=True,

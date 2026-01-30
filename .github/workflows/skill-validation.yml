@@ -38,6 +38,7 @@ jobs:
       - name: Run Skill Validation (Copilot)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x ci/validate_skills.sh
           ./ci/validate_skills.sh ${{ github.event.issue.number }} 50

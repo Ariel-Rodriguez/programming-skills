@@ -12,6 +12,16 @@ if [ -z "$PR_NUMBER" ]; then
     exit 1
 fi
 
+# Ensure GITHUB_TOKEN is available for subprocess
+if [ -n "$GITHUB_TOKEN" ]; then
+    export GITHUB_TOKEN
+    export COPILOT_GITHUB_TOKEN="$GITHUB_TOKEN"
+    export GH_TOKEN="$GITHUB_TOKEN"
+    echo "✓ GitHub token configured for Copilot CLI"
+else
+    echo "⚠ Warning: GITHUB_TOKEN not set in environment"
+fi
+
 echo "Checking for modified skills in PR #$PR_NUMBER..."
 
 # Detect modified skills
