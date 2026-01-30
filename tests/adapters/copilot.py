@@ -40,10 +40,12 @@ class CopilotCLIAdapter:
             )
             
             if result.returncode != 0:
-                stderr = result.stderr.strip() or "Unknown error"
+                stderr = result.stderr.strip()
+                stdout = result.stdout.strip()
+                error_msg = stderr or stdout or "Unknown error"
                 return Failure(
-                    "Copilot CLI failed",
-                    {"returncode": result.returncode, "stderr": stderr}
+                    f"Copilot CLI failed (rc={result.returncode}): {error_msg}",
+                    {"returncode": result.returncode, "stderr": stderr, "stdout": stdout}
                 )
             
             return Success(result.stdout.strip())
