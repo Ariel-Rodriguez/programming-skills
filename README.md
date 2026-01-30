@@ -42,6 +42,7 @@ Invoke-WebRequest -Uri "https://github.com/Ariel-Rodriguez/programming-skills/re
 | [AI Prompt Wrapper](docs/ai-prompt-wrapper.md) | Configure your AI assistant |
 | [Future Design](docs/future-skills-design.md) | Roadmap for v2.0.0 |
 | [Changelog](CHANGELOG.md) | Version history & skill changes |
+| [Benchmarks](benchmarks/) | Evaluate AI models against skills |
 
 ## Supported Platforms
 

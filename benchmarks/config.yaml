@@ -1,0 +1,17 @@
+# Benchmark Configuration
+
+# Default model for evaluation
+model: llama3.2:latest
+
+# Directory paths (relative to benchmarks/)
+skills_dir: ../skills
+runs_dir: ./results/runs
+
+# Ollama settings
+ollama:
+  base_url: http://localhost:11434/v1
+  timeout: 120
+
+# Benchmark settings
+runs_per_skill: 3
+max_refinement_attempts: 2
