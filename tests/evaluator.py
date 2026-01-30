@@ -468,11 +468,12 @@ def main():
             print("[FAIL] upskill not found. Run: uv pip install upskill")
             return 1
 
-        ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
-        if check_ollama_running(ollama_url):
-            print(f"[OK] Ollama running at {ollama_url}")
-        else:
-            print(f"[WARN] Ollama not running at {ollama_url} (start with: ollama serve)")
+        if args.provider == 'ollama':
+            ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
+            if check_ollama_running(ollama_url):
+                print(f\"[OK] Ollama running at {ollama_url}\")
+            else:
+                print(f\"[WARN] Ollama not running at {ollama_url} (start with: ollama serve)\")
 
     # Discover skills early for report generation or filtering
     all_skills = discover_skills(skills_dir)
@@ -513,12 +514,13 @@ def main():
     # Get models
     models = args.model or [config.get('model', 'llama3.2:latest')]
 
-    # Check Ollama
-    ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
-    if 'localhost' in ollama_url or '127.0.0.1' in ollama_url:
-        if not check_ollama_running(ollama_url):
-            print(f"Error: Ollama not running at {ollama_url}")
-            return 1
+    # Check Ollama status only if using ollama provider
+    if args.provider == 'ollama':
+        ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
+        if 'localhost' in ollama_url or '127.0.0.1' in ollama_url:
+            if not check_ollama_running(ollama_url):
+                print(f"Error: Ollama not running at {ollama_url}")
+                return 1
 
     # Run benchmarks
     results_dir.mkdir(parents=True, exist_ok=True)
