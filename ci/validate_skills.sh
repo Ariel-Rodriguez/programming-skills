@@ -18,10 +18,7 @@ if [ -n "$GITHUB_TOKEN" ]; then
     export COPILOT_GITHUB_TOKEN="$GITHUB_TOKEN"
     export GH_TOKEN="$GITHUB_TOKEN"
     
-    # Authenticate GitHub CLI (required for Copilot CLI)
-    echo "$GITHUB_TOKEN" | gh auth login --with-token
-    
-    echo "✓ GitHub token configured for Copilot CLI"
+    echo "✓ GitHub token configured (GH_TOKEN will be used by Copilot CLI)"
 else
     echo "⚠ Warning: GITHUB_TOKEN not set in environment"
 fi
