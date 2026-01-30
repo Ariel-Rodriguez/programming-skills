@@ -1,0 +1,26 @@
+[
+    {
+        "name": "extract_hardcoded_policy",
+        "input": "extract_hardcoded_policy.js",
+        "expected": {
+            "includes": [
+                "policy",
+                "constant"
+            ],
+            "excludes": [
+                "30 * 24"
+            ]
+        }
+    },
+    {
+        "name": "design_retry_mechanism",
+        "input": "Design a retry mechanism that accepts a policy strategy for different backoff types (Fixed vs Exponential).",
+        "expected": {
+            "includes": [
+                "strategy",
+                "backoff"
+            ],
+            "min_length": 100
+        }
+    }
+]

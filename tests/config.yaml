@@ -1,0 +1,18 @@
+# Benchmark Configuration
+
+# Default model for evaluation
+model: devstral-small-2:latest
+
+# Directory paths (relative to project root)
+skills_dir: ./skills
+runs_dir: ./tests/results/runs
+
+# Ollama settings
+ollama:
+  base_url: http://localhost:11434/v1
+  timeout: 120
+  num_ctx: 64000
+
+# Benchmark settings
+runs_per_skill: 3
+max_refinement_attempts: 2

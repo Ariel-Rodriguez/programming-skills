@@ -1,0 +1,27 @@
+[
+    {
+        "name": "refactor_global_state_access",
+        "input": "refactor_global_state_access.js",
+        "expected": {
+            "includes": [
+                "parameter",
+                "inject"
+            ],
+            "excludes": [
+                "window.",
+                "GLOBAL"
+            ]
+        }
+    },
+    {
+        "name": "detect_hidden_dependencies",
+        "input": "Analyze this code for Local Reasoning. What dependencies are hidden?\n\n```javascript\nimport { auth } from './auth';\n\nfunction deletePost(postId) {\n    if (auth.isAdmin()) {\n        db.posts.remove(postId);\n    }\n}\n```",
+        "expected": {
+            "includes": [
+                "implicit",
+                "parameter"
+            ],
+            "min_length": 50
+        }
+    }
+]

@@ -1,0 +1,16 @@
+# Benchmark results and generated files
+results/
+test_cases/*.json
+__pycache__/
+*.pyc
+.pytest_cache/
+.fastagent.jsonl
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
