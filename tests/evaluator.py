@@ -18,17 +18,8 @@ Applied Skills:
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
-
-# Debug: Check environment variables early
-_token_keys = ['GITHUB_TOKEN', 'GH_TOKEN', 'COPILOT_GITHUB_TOKEN']
-_found_tokens = [k for k in _token_keys if k in os.environ]
-if _found_tokens:
-    print(f"DEBUG: Found tokens in environment: {', '.join(_found_tokens)}")
-else:
-    print(f"DEBUG: No tokens found. Checked: {', '.join(_token_keys)}")
 
 # Domain imports
 from domain import Provider, ModelConfig, is_failure, is_success

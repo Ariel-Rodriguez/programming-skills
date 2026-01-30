@@ -25,44 +25,25 @@ class CopilotCLIAdapter:
         Naming as Design: Clear this invokes external CLI.
         """
         cmd = [
-            "copilot", "-p", prompt,
+            "copilot", 
+            "-p", prompt,
             "--model", config.model_name,
-            "--silent", "--yolo",
-            "--deny-tool", "write"
+            "--silent",
+            "--yolo",  # Enable all permissions for non-interactive mode
+            "--deny-tool", "write"  # Prevent file writes, force stdout output
         ]
         
         try:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
-            # Debug: Check if token exists
-            token_keys = ['GITHUB_TOKEN', 'GH_TOKEN', 'COPILOT_GITHUB_TOKEN']
-            found_tokens = [key for key in token_keys if key in env]
-            
-            if not found_tokens:
-                return Failure(
-                    f"No GitHub token found in environment. Checked: {', '.join(token_keys)}. "
-                    f"Available env keys: {', '.join(sorted(env.keys())[:20])}...",
-                    {"checked_keys": token_keys, "found": False}
-                )
-            
-            # Debug: Test if subprocess gets environment
-            test_result = subprocess.run(
-                ["sh", "-c", "echo DEBUG_ENV: GITHUB_TOKEN=$GITHUB_TOKEN GH_TOKEN=$GH_TOKEN"],
-                capture_output=True,
-                text=True,
-                env=env
-            )
-            print(f"      [DEBUG] Subprocess env test: {test_result.stdout.strip()}")
-            
-            # Token found, proceed with call
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
                 timeout=300,
-                env=env  # Explicitly pass environment
+                env=env
             )
             
             if result.returncode != 0:
