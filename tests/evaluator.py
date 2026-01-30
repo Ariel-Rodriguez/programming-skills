@@ -514,9 +514,11 @@ def main():
     # Get models
     models = args.model or [config.get('model', 'llama3.2:latest')]
 
+    # Get Ollama URL (used as base_url if ollama provider is selected)
+    ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
+
     # Check Ollama status only if using ollama provider
     if args.provider == 'ollama':
-        ollama_url = config.get('ollama', {}).get('base_url', 'http://localhost:11434/v1')
         if 'localhost' in ollama_url or '127.0.0.1' in ollama_url:
             if not check_ollama_running(ollama_url):
                 print(f"Error: Ollama not running at {ollama_url}")
