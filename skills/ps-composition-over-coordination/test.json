@@ -1,26 +1,39 @@
 [
     {
-        "name": "refactor_orchestrator_function",
-        "input": "Refactor this function that coordinates 5 different steps (fetch, validate, calculate, update, notify) into small composable units. Apply Composition Over Coordination.",
+        "name": "refactor_orchestrator_class",
+        "input": "Refactor the following code into small composable units, avoiding a central coordinator. You MUST provide the complete refactored code in a javascript code block:\n\ncoordinator_case.js",
         "expected": {
             "includes": [
-                "unit",
-                "compose",
-                "pipeline"
+                "function",
+                "const",
+                "```javascript"
             ],
-            "min_length": 150
+            "excludes": [
+                "class PaymentProcessor",
+                "Orchestrator {",
+                "Manager {"
+            ],
+            "regex": [
+                "(function|const)\\s+(validate|auth|bank|db|notify)",
+                "(pipeline|compose|pipe|async)"
+            ],
+            "min_length": 300
         }
     },
     {
         "name": "identify_coordination_bottleneck",
-        "input": "Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck.",
+        "input": "Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck. Mention design principles.",
         "expected": {
-            "includes": [
+            "contains_any": [
                 "god object",
-                "coupling",
-                "responsibility"
+                "tight coupling",
+                "unmaintainable",
+                "bottleneck",
+                "Single Responsibility",
+                "separation of concerns",
+                "subsystem"
             ],
-            "min_length": 100
+            "min_length": 150
         }
     }
 ]
