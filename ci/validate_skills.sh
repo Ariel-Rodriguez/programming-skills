@@ -19,7 +19,7 @@ MODIFIED_FILES=$(gh pr diff "$PR_NUMBER" --name-only)
 MODIFIED_SKILLS=$(echo "$MODIFIED_FILES" | grep '^skills/' | cut -d'/' -f2 | sort -u | xargs)
 
 # Build command array
-CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge")
+CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 
 if [ -n "$MODIFIED_SKILLS" ]; then
     echo "Detected modified skills: $MODIFIED_SKILLS"
@@ -34,3 +34,26 @@ fi
 # Execute
 echo "Executing: ${CMD[*]}"
 "${CMD[@]}"
+
+# Debug output on failure
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "============================================"
+    echo "DEBUG: Evaluation failed. Showing details:"
+    echo "============================================"
+    
+    if [ -f "tests/results/summary.json" ]; then
+        echo ""
+        echo "--- tests/results/summary.json ---"
+        cat tests/results/summary.json
+    fi
+    
+    if [ -f "comment.md" ]; then
+        echo ""
+        echo "--- comment.md ---"
+        cat comment.md
+    fi
+fi
+
+exit $EXIT_CODE

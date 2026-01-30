@@ -121,6 +121,8 @@ def _run_single_test(
     
     # Handle model errors
     if is_failure(result):
+        # Always print model errors, not just in verbose mode
+        print(f"      [MODEL ERROR] {test.name}: {result.error_message}")
         return TestResult(
             test_name=test.name,
             passed=False,

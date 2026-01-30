@@ -211,6 +211,28 @@ def main() -> int:
     
     if failed_skills:
         print(f"\n[FAIL] {len(failed_skills)} skills failed threshold: {', '.join(failed_skills)}")
+        
+        # Debug info: show what went wrong
+        print("\nDEBUG - Failure details:")
+        for r in all_results:
+            if r.skill_name in failed_skills:
+                print(f"\n  {r.skill_name}:")
+                print(f"    Baseline: {r.baseline_pass_rate}% ({sum(1 for t in r.baseline_results if t.passed)}/{len(r.baseline_results)} passed)")
+                print(f"    With Skill: {r.skill_pass_rate}% ({sum(1 for t in r.skill_results if t.passed)}/{len(r.skill_results)} passed)")
+                
+                if r.judgment:
+                    print(f"    Judge: {r.judgment.vs_baseline} (score: {r.judgment.score}/100)")
+                    print(f"    Reasoning: {r.judgment.reasoning}")
+                
+                # Show test failures
+                for baseline, skill in zip(r.baseline_results, r.skill_results):
+                    if not baseline.passed or not skill.passed:
+                        print(f"    Test: {baseline.test_name}")
+                        if not baseline.passed:
+                            print(f"      Baseline FAIL: {baseline.failure_reason[:100]}")
+                        if not skill.passed:
+                            print(f"      Skill FAIL: {skill.failure_reason[:100]}")
+        
         return 1
     
     return 0
