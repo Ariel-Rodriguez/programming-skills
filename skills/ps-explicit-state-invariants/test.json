@@ -1,0 +1,29 @@
+[
+    {
+        "name": "refactor_boolean_explosion",
+        "input": "refactor_boolean_explosion.js",
+        "expected": {
+            "includes": [
+                "union",
+                "Success",
+                "Error"
+            ],
+            "excludes": [
+                "isLoading",
+                "isError"
+            ]
+        }
+    },
+    {
+        "name": "state_invariant_definition",
+        "input": "What is the primary invariant for a 'multi-step Wizard' state that has: 1. Current Step, 2. Form Data, 3. Submission Result? Apply Explicit State Invariants.",
+        "expected": {
+            "includes": [
+                "invariant",
+                "valid",
+                "transition"
+            ],
+            "min_length": 100
+        }
+    }
+]

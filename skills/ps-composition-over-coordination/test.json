@@ -1,0 +1,26 @@
+[
+    {
+        "name": "refactor_orchestrator_function",
+        "input": "Refactor this function that coordinates 5 different steps (fetch, validate, calculate, update, notify) into small composable units. Apply Composition Over Coordination.",
+        "expected": {
+            "includes": [
+                "unit",
+                "compose",
+                "pipeline"
+            ],
+            "min_length": 150
+        }
+    },
+    {
+        "name": "identify_coordination_bottleneck",
+        "input": "Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck.",
+        "expected": {
+            "includes": [
+                "god object",
+                "coupling",
+                "responsibility"
+            ],
+            "min_length": 100
+        }
+    }
+]

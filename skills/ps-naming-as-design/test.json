@@ -1,0 +1,28 @@
+[
+    {
+        "name": "refactor_generic_names",
+        "input": "Refactor these names to encode intent and role instead of implementation:\n\n1. `VAR userArray = []`\n2. `FUNCTION handleData(data)`\n3. `CONST VALUE = 10` (referring to minimum age)",
+        "expected": {
+            "includes": [
+                "users",
+                "MINIMUM_AGE"
+            ],
+            "excludes": [
+                "userArray",
+                "handleData",
+                "VALUE ="
+            ]
+        }
+    },
+    {
+        "name": "identify_naming_violations",
+        "input": "Why does the name `saveUserAndLogActivity` violate the Naming as Design principle?",
+        "expected": {
+            "includes": [
+                "And",
+                "responsibility"
+            ],
+            "min_length": 50
+        }
+    }
+]

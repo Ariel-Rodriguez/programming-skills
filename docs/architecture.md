@@ -2,75 +2,68 @@
 
 ## Design Principles
 
-**Simplicity**: Skills defined once with clear pseudocode examples, no language-specific implementations needed.
-
-**Single Source of Truth**: `skills/` contains all skill definitions with inline pseudocode examples.
-
-**No Build Process**: Skills are ready to use as-is, no compilation or transformation required.
+- **Simplicity**: Skills are defined once with clear principles and examples.
+- **Single Source of Truth**: The `skills/` directory contains all skill definitions and their associated benchmark scenarios.
+- **Language Independence**: Principles are documented in a way that applies to any programming language, typically using pseudocode for illustrations.
+- **Severity-Based Enforcement**: Skills are categorized by impact (BLOCK, WARN, SUGGEST) to guide AI agents on how to handle violations.
 
 ## Directory Structure
 
-```
+```text
 basic-programming-skills/
 ├── skills/                      # Skill definitions
-│   ├── functional-core-imperative-shell/
-│   │   └── SKILL.md            # Complete skill with pseudocode
+│   ├── ps-functional-core-imperative-shell/
+│   │   ├── SKILL.md            # Principle & Documentation
+│   │   ├── test.json           # Benchmark scenarios & expectations
+│   │   └── example_case.js      # (Optional) External input files
 │   └── ...
-│
-├── ci/                          # Release automation
-│   └── release.sh
-│
-├── .github/workflows/           # CI/CD pipelines
-│
-└── docs/                        # Documentation
-    └── architecture.md         # This file
+├── tests/                       # Benchmarking suite
+│   ├── evaluator.py            # Main evaluation engine
+│   └── config.yaml             # Benchmarking configuration
+├── docs/                        # Project documentation
+│   ├── architecture.md
+│   ├── contributing.md
+│   └── ai-prompt-wrapper.md
+└── README.md
 ```
 
-## Skill Format
+## Skill Format (v2.2.0)
 
-Each `SKILL.md` contains:
-1. YAML frontmatter with name and description
-2. Principle and explanation
-3. When to apply
-4. How to implement
-5. **Inline pseudocode examples** (language-agnostic)
-6. Testing strategy (using pseudocode)
-7. Review checklist
+Each skill is a directory containing:
 
-## Why This Design?
+1.  **SKILL.md**: A markdown file with YAML frontmatter containing `name`, `description`, and `severity`.
+2.  **test.json**: A machine-readable file containing benchmark test cases.
+3.  **Support Files**: Optional source code files referenced by `test.json` for complex scenarios.
 
-### ✅ Advantages
+### Severity Levels
 
-1. **Simplicity**: No build process, no JSON merging, no placeholders
-2. **Clarity**: Examples are directly in the skill file
-3. **Language Independence**: Pseudocode works for all languages
-4. **Maintainability**: One file per skill, easy to update
-5. **Ready to Use**: Copy skills/ folder directly into your project
+- **BLOCK**: Architectural or structural violations that must stop code generation and require immediate refactoring.
+- **WARN**: Significant design issues that should be flagged and explained, but may be bypassed with justification.
+- **SUGGEST**: Optional improvements or refinements that enhance code quality without being critical.
 
-### 🔄 Usage
+## Automated Benchmarking
 
-**Using skills:**
-```bash
-1. Clone repository
-2. Copy skills/ folder to .cursor/skills/ or .agent/skills/
-3. Done - no build step needed
-```
+The project includes a robust benchmarking system to verify that AI models can correctly apply the defined skills.
 
-**Adding a new skill:**
-```bash
-1. Create skills/new-skill/SKILL.md
-2. Write skill content with pseudocode examples
-3. Done - immediately usable
-```
+### Evaluator Engine
+
+The `tests/evaluator.py` script:
+- Automatically discovers skills and their corresponding `test.json` files.
+- Executes tests against models using the Ollama REST API.
+- Supports dual-pass evaluation: a baseline run (without skill context) and a skill run (with skill context).
+- Calculates the improvement delta and pass rates.
+
+### Test Schema
+
+Tests in `test.json` support:
+- **`includes`**: Strings that must all be present in the model's response.
+- **`excludes`**: Strings that must not appear in the response.
+- **`regex`**: Regular expression patterns for advanced verification.
+- **`min_length` / `max_length`**: Character count constraints.
+- **External Inputs**: Inputs can reference a filename in the same directory, which the evaluator will load dynamically.
 
 ## Platform Support
 
-### Cursor & Antigravity
-- Use SKILL.md format directly
-- Copy skills/ folder to `.cursor/skills/` or `.agent/skills/`
-- YAML frontmatter + markdown body
-
-### Copilot
-- Uses `.github/copilot/instructions.md`
-- Different format from Agent Skills standard
-- Maintained separately in copilot/ folder
+The skills are designed to be copied directly into AI agent environments:
+- **Cursor**: Copy `skills/` to `.cursor/skills/`.
+- **Antigravity**: Copy `skills/` to `.agent/skills/`.

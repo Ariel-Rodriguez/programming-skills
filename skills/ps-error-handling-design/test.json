@@ -1,0 +1,28 @@
+[
+    {
+        "name": "refactor_swallowed_error",
+        "input": "refactor_swallowed_error.js",
+        "expected": {
+            "includes": [
+                "Result",
+                "return",
+                "explicit"
+            ],
+            "excludes": [
+                "console.log"
+            ]
+        }
+    },
+    {
+        "name": "design_validation_flow",
+        "input": "Design a user registration flow that handles: 1. Invalid email, 2. Database connection failure, 3. User already exists. Apply Error Handling Design.",
+        "expected": {
+            "includes": [
+                "Result",
+                "Success",
+                "Error"
+            ],
+            "min_length": 200
+        }
+    }
+]

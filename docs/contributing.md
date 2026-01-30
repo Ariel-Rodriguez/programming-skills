@@ -2,22 +2,20 @@
 
 Thank you for your interest in improving AI agent skills for better code quality!
 
-## Current Version: v1.0.0
+## Current Version: v2.2.0
 
-This repository is currently at version **1.0.0**, which uses a simple, pseudocode-based format for maximum clarity and language independence. See [future-skills-design.md](future-skills-design.md) for proposed v2.0.0 enhancements.
+This repository is organized around self-documenting skills that include automated benchmark tests to ensure reliability across different AI models.
 
 ## Repository Structure
 
-```
+```text
 basic-programming-skills/
-├── skills/              # All skill definitions (SKILL.md files)
-├── ci/                  # Release automation scripts
-├── .github/workflows/   # CI/CD pipelines
+├── skills/              # All skill definitions
+│   ├── ps-skill-name/
+│   │   ├── SKILL.md    # Documentation & Examples
+│   │   └── test.json   # Benchmark scenarios
+├── tests/               # Benchmarking engine
 └── docs/                # Documentation
-    ├── architecture.md
-    ├── contributing.md (this file)
-    ├── ai-prompt-wrapper.md
-    └── future-skills-design.md
 ```
 
 ## Adding a New Skill
@@ -26,8 +24,8 @@ basic-programming-skills/
 
 ```bash
 cd skills
-mkdir your-skill-name  # Use lowercase-with-hyphens
-cd your-skill-name
+mkdir ps-your-skill-name  # Use lowercase-with-hyphens
+cd ps-your-skill-name
 ```
 
 ### 2. Create SKILL.md
@@ -36,261 +34,67 @@ Every skill needs a `SKILL.md` with YAML frontmatter:
 
 ```markdown
 ---
-name: your-skill-name
-description: Short description that helps AI decide when to use this skill. Mention keywords and use cases.
+name: ps-your-skill-name
+description: Short description for AI context discovery.
+severity: BLOCK | WARN | SUGGEST
 ---
 
 # Your Skill Name
 
 ## Principle
-
-What is the core principle this skill enforces?
+What core rule does this skill enforce?
 
 ## When to Use
-
-- List specific scenarios
-- When code smells like X
-- During Y type of work
+List specific scenarios or code smells.
 
 ## Instructions
+✅ **Do:** Clear guidelines.
+❌ **Avoid:** Common anti-patterns.
 
-### Core guidelines
-
-✅ **Do:**
-- Clear requirement
-
-❌ **Avoid:**
-- Clear anti-pattern
-
-## Examples
-
-### ✅ Good: Description
-
-\```
-FUNCTION goodExample():
-    // Pseudocode showing correct pattern
-    RETURN result
-\```
-
-*Explanation of why this is good.*
-
-### ❌ Bad: Description
-
-\```
-FUNCTION badExample():
-    // Pseudocode showing anti-pattern
-    RETURN result
-\```
-
-*Explanation of why this is problematic.*
-
-## Testing Strategy
-
-\```
-TEST "description":
-    // Arrange - Set up test data
-    input = createTestData()
-    expected = createExpectedResult()
-    
-    // Act - Execute function
-    result = function(input)
-    
-    // Assert - Verify result
-    ASSERT result EQUALS expected
-\```
-
-## AI Review Checklist
-
-- [ ] Specific question to verify compliance
-- [ ] Another verification question
-
-**If [condition] → [Action] (WARN/SUGGEST)**
-
-## Related Patterns
-
-- Links to related skills
-
-## References
-
-- Links to foundational articles/talks
+## Examples (Pseudocode)
+Use language-agnostic pseudocode for principles.
 ```
 
-### 3. Use Pseudocode, Not Real Code
+### 3. Create test.json
 
-**v1.0.0 uses language-agnostic pseudocode:**
+Benchmark scenarios ensure the skill works. Tests use the following schema:
 
-✅ **Good:**
-```
-FUNCTION calculateTotal(items):
-    subtotal = sum(items.map(item => item.price))
-    RETURN subtotal
-```
-
-❌ **Bad:**
-```javascript
-const calculateTotal = (items) => {
-  return items.reduce((sum, item) => sum + item.price, 0);
-};
-```
-
-**Why:** Pseudocode works for all programming languages. Real code examples may be added in v2.0.0.
-
-### 4. Follow AAA Pattern for Tests
-
-**All test examples must follow Arrange-Act-Assert pattern:**
-
-```
-TEST "description":
-    // Arrange - Set up test data and conditions
-    input = createTestData()
-    expected = createExpectedResult()
-    
-    // Act - Execute the function being tested
-    result = functionUnderTest(input)
-    
-    // Assert - Verify the result
-    ASSERT result EQUALS expected
+```json
+[
+  {
+    "name": "scenario_name",
+    "input": "Code snippet or external_file.js",
+    "expected": {
+      "includes": ["term_must_exist"],
+      "excludes": ["forbidden_pattern"],
+      "regex": ["pattern\\d+"],
+      "min_length": 50
+    }
+  }
+]
 ```
 
-**Why:** AAA pattern makes tests clear, consistent, and easy to understand. It explicitly separates setup, execution, and verification.
+## Testing & Benchmarking
 
-### 4. Test the Skill
+Before submitting, verify your skill with the built-in evaluator:
 
-1. Copy the skill folder to `.cursor/skills/` or `.agent/skills/`
-2. Open your AI assistant
-3. Test by asking it to review code that violates the skill
-4. Verify it catches violations and suggests fixes
-
-### 5. Submit Pull Request
-
-1. Fork the repository
-2. Add your skill to `skills/`
-3. Update `README.md` to list the new skill
-4. Update `CHANGELOG.md` under `[Unreleased]` section
-5. Submit PR using the format below
-
-**PR Title Format:**
-
-```
-<type>: <description>
-
-Types:
-- feat: New skill added
-- improve: Existing skill improved
-- fix: Bug fix or correction
-- docs: Documentation only changes
-- chore: Build, CI/CD, or tooling changes
-
-Examples:
-- feat: add retry-with-backoff skill
-- improve: clarify functional-core examples
-- fix: correct typo in naming-as-design
-- docs: update installation instructions
+```bash
+# Run benchmark for your specific skill
+uv run python tests/evaluator.py --skill ps-your-skill-name --verbose
 ```
 
-**PR Description Template:**
+### Verification Checklist
+- [ ] Correct `severity` assigned in `SKILL.md`.
+- [ ] At least 2 test scenarios in `test.json`.
+- [ ] Pass rate > 50% for the "With Skill" run.
+- [ ] No grammar or spelling errors in documentation.
 
-```markdown
-## Changes
-- Brief description of what changed
+## Submit Pull Request
 
-## Skill Impact
-- Which skills were added/modified?
-- Why was this change needed?
-
-## Testing
-- How did you test this change?
-
-## Checklist
-- [ ] Updated CHANGELOG.md
-- [ ] Updated README.md (if new skill)
-- [ ] Tested locally with AI assistant
-- [ ] Followed pseudocode format (no language-specific code)
-```
-
-## Skill Quality Guidelines
-
-### Descriptions
-
-✅ **Good:**
-> "Enforces separation of pure logic from side effects. Use when reviewing code that mixes business logic with IO, framework calls, or state mutations."
-
-❌ **Bad:**
-> "A skill about functions and separation."
-
-**Why:** AI needs keywords and context to decide when to apply the skill.
-
-### Examples
-
-- Include both ✅ GOOD and ❌ BAD examples
-- Use realistic pseudocode, not toy examples
-- Show the fix, not just the problem
-- Cover edge cases
-
-### Language
-
-- Be prescriptive: "Must", "Must not", "Should"
-- Use active voice
-- Keep it scannable with headers
-- Include checklists for AI to verify
-
-### Scope
-
-- One skill = one principle
-- Don't try to cover everything
-- Deep, not broad
-- Focus on "why", not just "how"
-
-## Updating Existing Skills
-
-### Small Improvements
-
-- Fix typos, improve examples, add clarifications
-- Submit PR directly
-
-### Major Changes
-
-- Open an issue first to discuss
-- Explain the problem with current version
-- Propose specific improvements
-
-## Testing
-
-We don't have automated tests yet (contributions welcome!), but you can test manually:
-
-1. Install the skill in your local setup
-2. Write code that violates the skill
-3. Ask your AI assistant to review it
-4. Verify it catches the violation
-5. Verify the suggested fix is correct
-
-## Style Guide
-
-- Use Markdown format
-- Use pseudocode for all examples (language-agnostic)
-- Use emoji sparingly (✅ ❌ are fine for examples)
-- Keep tone professional but friendly
-- Structure: Principle → When to Apply → How to Implement → Examples → Testing
-
-## Release Process
-
-Maintainers follow this workflow:
-
-1. **Merge PR** - Review and merge contributor PRs
-2. **Update CHANGELOG** - Move `[Unreleased]` items to new version
-3. **Tag Release** - Create git tag (e.g., `v1.1.0`)
-4. **Auto-Release** - GitHub Actions generates `.zip` files
-5. **Publish** - Release notes auto-generated from merged PRs
-
-**Versioning:**
-- **Major (2.0.0)**: Breaking format changes
-- **Minor (1.1.0)**: New skills added
-- **Patch (1.0.1)**: Fixes and improvements
-
-## Questions?
-
-- Open an issue with the `question` label
-- Check [future-skills-design.md](future-skills-design.md) for roadmap
+1. Fork the repository.
+2. Add your skill folder.
+3. Update `README.md` and `CHANGELOG.md`.
+4. Submit PR with a clear description of the new principle.
 
 ## License
 

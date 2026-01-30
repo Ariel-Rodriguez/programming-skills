@@ -5,7 +5,19 @@ All notable changes to the skills collection will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.0] - 2026-01-30
+
+### Rebranding
+- Added `ps-` prefix to all 12 programming skills (e.g., `ps-functional-core-imperative-shell`) for better branding alignment.
+
+### Benchmarking
+- Implemented robust validation schema (`includes`, `excludes`, `regex`, `min_length`, `max_length`) in `evaluator.py`.
+- Added support for external file inputs in benchmark scenarios.
+- Improved diagnostic output in verbose mode.
+
+### Documentation
+- Consolidated Architecture and Design documentation into `docs/architecture.md`.
+- Updated `contributing.md` for the v2.2.0 workflow.
 
 ### Added
 - Initial 12 programming skills with pseudocode examples

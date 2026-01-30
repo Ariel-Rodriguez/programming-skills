@@ -1,0 +1,31 @@
+[
+    {
+        "name": "refactor_mixed_logic",
+        "input": "mixed_logic_case.js",
+        "expected": {
+            "includes": [
+                "core",
+                "shell"
+            ],
+            "excludes": [
+                "db.query",
+                "db.execute"
+            ]
+        }
+    },
+    {
+        "name": "identify_side_effects",
+        "input": "Identify the side effects in this function and explain why they violate the Functional Core principle:\n\n```javascript\nfunction validateAndLog(user) {\n    if (!user.email.includes('@')) {\n        console.error('Invalid email');\n        return false;\n    }\n    logger.info('User validated');\n    return true;\n}\n```",
+        "expected": {
+            "includes": [
+                "side effect",
+                "pure"
+            ],
+            "regex": [
+                "console\\.error",
+                "logger\\.info"
+            ],
+            "min_length": 50
+        }
+    }
+]

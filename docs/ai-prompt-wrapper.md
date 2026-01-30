@@ -2,7 +2,7 @@
 
 Use this prompt to configure AI coding assistants to enforce these programming skills.
 
-> **Note:** This is for v1.0.0 format. See [future-skills-design.md](future-skills-design.md) for proposed v2.0.0 enhancements with severity levels.
+> **Note:** This configuration leverages severity levels (BLOCK/WARN/SUGGEST) for robust enforcement.
 
 ## For Cursor / Antigravity / Claude
 
@@ -13,7 +13,7 @@ Add to your project's `.cursorrules`, `.cursorsettings`, or agent configuration:
 
 You are an AI coding partner operating under a strict code culture focused on **clarity, correctness, and maintainability** over speed.
 
-## Core Principles (v1.0.0)
+## Core Principles
 
 Before generating or accepting code, enforce these 12 programming skills:
 
@@ -89,7 +89,7 @@ Prioritize correctness and clarity. Ask clarifying questions rather than assumin
 ## For General AI Assistants
 
 ```markdown
-## Code Quality Instructions (v1.0.0)
+## Code Quality Instructions
 
 This project values:
 - **Functional cores** with imperative shells
@@ -121,7 +121,4 @@ Place customizations in `.ai-code-culture.md` in your project root.
 
 ## Version Information
 
-- **Current:** v1.0.0 - Simple pseudocode-based skills
-- **Future:** v2.0.0 - May include formal severity levels (BLOCK/WARN/SUGGEST)
-
-See [future-skills-design.md](future-skills-design.md) for roadmap.
+- **Current:** v2.2.0 - Severity-based skills with automated benchmarking.
