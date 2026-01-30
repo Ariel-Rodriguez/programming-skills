@@ -119,7 +119,9 @@ def generate_test_cases(skill: Skill, verbose: bool = False) -> list[dict]:
                             if external_file.exists() and external_file.is_file():
                                 if verbose:
                                     print(f"    [INFO] Loading external input from {input_val}")
-                                test['input'] = external_file.read_text(encoding='utf-8')
+                                # Replace the filename with its content, but keep a label without the path
+                                file_content = external_file.read_text(encoding='utf-8')
+                                test['input'] = f"CODE CONTENT ({input_val}):\n\n{file_content}"
                     
                     return raw_tests
             except Exception as e:
@@ -206,7 +208,8 @@ def call_copilot_cli(prompt: str, model: str, verbose: bool = False) -> str:
     try:
         # Use subprocess with list for safer argument handling
         # --yolo skips confirmations, --silent outputs just the result
-        cmd = ["copilot", "-p", prompt, "--model", model, "--silent", "--yolo"]
+        # --deny-tool 'write' prevents the agent from modifying local files
+        cmd = ["copilot", "-p", prompt, "--model", model, "--silent", "--yolo", "--deny-tool", "write"]
         
         # We use a large timeout as cloud models can sometimes be slow
         result = subprocess.run(
