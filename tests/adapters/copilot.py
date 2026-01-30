@@ -46,6 +46,15 @@ class CopilotCLIAdapter:
                     {"checked_keys": token_keys, "found": False}
                 )
             
+            # Debug: Test if subprocess gets environment
+            test_result = subprocess.run(
+                ["sh", "-c", "echo DEBUG_ENV: GITHUB_TOKEN=$GITHUB_TOKEN GH_TOKEN=$GH_TOKEN"],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            print(f"      [DEBUG] Subprocess env test: {test_result.stdout.strip()}")
+            
             # Token found, proceed with call
             result = subprocess.run(
                 cmd,
