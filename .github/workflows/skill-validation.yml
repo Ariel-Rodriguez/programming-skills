@@ -19,16 +19,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
+      - name: Parse test command
+        id: command
+        run: |
+          SKILLS=$(python3 ci/parse_test_command.py "${{ github.event.comment.body }}")
+          echo "skills=$SKILLS" >> $GITHUB_OUTPUT
+          if [ -n "$SKILLS" ]; then
+            echo "Override skills: $SKILLS"
+          else
+            echo "Auto-detecting changed skills..."
+          fi
+
       - name: Generate matrix
         id: matrix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          python3 ci/orchestrate_evaluations.py "$PR_NUMBER" --matrix-only --filter-provider all > /tmp/matrix.json 2>&1
+          python3 ci/generate_matrix.py "$PR_NUMBER" ${{ steps.command.outputs.skills }} > /tmp/matrix.json
+          
           echo "result<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/matrix.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+          
+          python3 -c "import json; m=json.load(open('/tmp/matrix.json')); print(f'Generated {len(m[\"include\"])} jobs')"
 
   evaluate:
     needs: prepare
@@ -106,7 +120,7 @@ jobs:
           path: tests/results/
 
       - name: Consolidate results
-        run: python3 ci/consolidate_results.py || echo "# Results pending" > comment.md
+        run: python3 ci/consolidate_results.py
 
       - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2

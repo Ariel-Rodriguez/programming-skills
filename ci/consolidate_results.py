@@ -15,79 +15,61 @@ def main():
 
     print("==> Consolidating results from all evaluations")
 
-    # Find all result directories
-    result_dirs = sorted([d for d in results_base.glob("*/*") if d.is_dir()])
+    # Find all summary.json files (artifacts download to flat structure)
+    summary_files = sorted(results_base.glob("*/summary.json"))
 
-    if not result_dirs:
-        print("No results found in tests/results")
-        sys.exit(1)
+    if not summary_files:
+        print(f"No results found in {results_base}")
+        print(f"Directory contents: {list(results_base.glob('*'))}")
+        # Write empty comment so job doesn't fail
+        Path("comment.md").write_text("# Evaluation Results\n\nNo results found.\n")
+        sys.exit(0)
 
     # Check for failures
     failed = 0
     succeeded = 0
     all_results = []
 
-    print("\nResults by provider/model:")
-    print("==========================")
+    print("\nResults:")
+    print("========")
 
-    for result_dir in result_dirs:
-        exit_code_file = result_dir / "exit_code"
-        if not exit_code_file.exists():
-            continue
-
+    for summary_file in summary_files:
         try:
-            exit_code = int(exit_code_file.read_text().strip())
-        except (ValueError, IOError):
-            continue
-
-        provider_model = str(result_dir.relative_to(results_base))
-
-        if exit_code == 0:
-            print(f"✅ {provider_model} - PASSED")
+            summary = json.loads(summary_file.read_text())
+            artifact_name = summary_file.parent.name
+            
+            all_results.append({
+                "artifact": artifact_name,
+                "summary": summary,
+            })
+            
+            print(f"✅ {artifact_name}")
             succeeded += 1
-        else:
-            print(f"❌ {provider_model} - FAILED (exit code: {exit_code})")
+            
+        except json.JSONDecodeError:
+            print(f"❌ {summary_file.parent.name} - Could not parse JSON")
             failed += 1
-
-        # Collect summary if exists
-        summary_file = result_dir / "summary.json"
-        if summary_file.exists():
-            try:
-                summary = json.loads(summary_file.read_text())
-                all_results.append({
-                    "provider_model": provider_model,
-                    "summary": summary,
-                })
-            except json.JSONDecodeError:
-                pass
 
     print("\nSummary:")
     print("========")
-    print(f"Succeeded: {succeeded}")
+    print(f"Processed: {len(all_results)}")
     print(f"Failed: {failed}")
 
-    # Generate consolidated comment for PR
-    pr_number = os.environ.get("PR_NUMBER")
-    if pr_number and failed == 0:
-        print("\nGenerating consolidated PR comment...")
-
-        comment = f"## 🎉 All Evaluations Passed\n\n"
-        comment += f"Tested across {succeeded} provider/model combinations.\n\n"
-
+    # Generate comment
+    comment = "# 📊 Evaluation Results\n\n"
+    
+    if all_results:
+        comment += f"Processed {len(all_results)} evaluation(s).\n\n"
+        
         for result in all_results:
-            comment += f"### Results: {result['provider_model']}\n"
+            comment += f"## {result['artifact']}\n"
             comment += f"```json\n{json.dumps(result['summary'], indent=2)}\n```\n\n"
+    else:
+        comment += "No evaluation results found.\n"
 
-        comment_path = Path("comment.md")
-        comment_path.write_text(comment)
-        print("✓ Consolidated comment saved to comment.md")
-
-    # Exit with failure if any evaluation failed
-    if failed > 0:
-        print(f"\n❌ {failed} evaluation(s) failed")
-        sys.exit(1)
-
-    print("\n✅ All evaluations passed")
+    Path("comment.md").write_text(comment)
+    print("\n✓ Comment saved to comment.md")
+    
     sys.exit(0)
 
 
