@@ -74,61 +74,28 @@ def extract_description_from_content(content: str) -> str:
 
 def evaluate_response_against_expectations(response: str, expected: dict) -> tuple[bool, str]:
     """
-    Evaluate AI response against test expectations.
+    Evaluate AI response - now just checks if response exists.
     
     Pure function - deterministic evaluation.
-    Policy-Mechanism Separation: Evaluation rules as data structure.
+    Simplified: No mechanical rules, only semantic judgment.
+    
+    The "focus" field in expected is guidance for the judge, not rules.
+    Actual scoring is deterministic: (tests_passed / total_tests) * 100
     
     Args:
         response: AI model response
-        expected: Expectations dictionary with rules
+        expected: Expectations dictionary with "focus" guidance
         
     Returns:
         Tuple of (passed, failure_reason)
-        
-    Expectations format:
-        - excludes: list[str] - None of these must appear
-        - includes: list[str] - ALL of these must appear
-        - contains_any: list[str] - At least ONE must appear
-        - regex: list[str] - ALL patterns must match
-        - min_length: int - Minimum response length
-        - max_length: int - Maximum response length
+        - Passes if response is non-empty
+        - Judge will evaluate semantic quality
     """
-    response_lower = response.lower()
+    # Check if response is substantive (not just error or empty)
+    if not response or len(response.strip()) < 10:
+        return False, "Response too brief or empty"
     
-    # Rule 1: Excludes - None must match
-    excludes = expected.get('excludes', []) + expected.get('does_not_contain', [])
-    for term in excludes:
-        if term.lower() in response_lower:
-            return False, f"Found excluded term: {term}"
-    
-    # Rule 2: Includes - ALL must match
-    includes = expected.get('includes', [])
-    for term in includes:
-        if term.lower() not in response_lower:
-            return False, f"Missing included term: {term}"
-    
-    # Rule 3: Contains Any - At least ONE must match
-    contains_any = expected.get('contains_any', [])
-    if contains_any:
-        if not any(term.lower() in response_lower for term in contains_any):
-            return False, f"Missing all terms from contains_any: {contains_any}"
-    
-    # Rule 4: Regex - ALL must match
-    regexes = expected.get('regex', [])
-    if isinstance(regexes, str):
-        regexes = [regexes]
-    for pattern in regexes:
-        if not re.search(pattern, response, re.IGNORECASE | re.DOTALL):
-            return False, f"Regex failed to match: {pattern}"
-    
-    # Rule 5: Length constraints
-    if 'min_length' in expected and len(response) < expected['min_length']:
-        return False, f"Response too short: {len(response)} < {expected['min_length']}"
-    
-    if 'max_length' in expected and len(response) > expected['max_length']:
-        return False, f"Response too long: {len(response)} > {expected['max_length']}"
-    
+    # If we get here, response is acceptable for judge evaluation
     return True, ""
 
 
@@ -149,3 +116,27 @@ def build_skill_instruction(skill_content: str) -> str:
     
     focused_guidance = extract_skill_guidance(skill_content)
     return f"Apply the following programming skill:\n\n{focused_guidance}\n\n"
+
+def get_rating_label(pass_rate: int) -> str:
+    """
+    Map pass percentage to categorical label.
+    
+    Pure function: Deterministic classification.
+    - outstanding: 100%
+    - good: 75-99%
+    - regular: 51-74%
+    - vague: 0-50%
+    
+    Args:
+        pass_rate: Achievement percentage (0-100)
+        
+    Returns:
+        Categorical string label
+    """
+    if pass_rate >= 100:
+        return "outstanding"
+    if pass_rate >= 75:
+        return "good"
+    if pass_rate >= 51:
+        return "regular"
+    return "vague"

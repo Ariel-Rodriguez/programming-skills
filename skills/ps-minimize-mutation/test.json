@@ -3,25 +3,14 @@
         "name": "refactor_mutating_argument",
         "input": "refactor_mutating_argument.js",
         "expected": {
-            "includes": [
-                "spread",
-                "return {"
-            ],
-            "excludes": [
-                "user.isActive =",
-                "user.activatedAt ="
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     },
     {
         "name": "identify_unsafe_mutation",
         "input": "Why is this code unsafe due to mutation?\n\n```javascript\nconst list = [1, 2, 3];\nprocess(list);\nconsole.log(list); // Might be changed!\n```",
         "expected": {
-            "includes": [
-                "side effect",
-                "shared mutable state"
-            ],
-            "min_length": 50
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     }
 ]

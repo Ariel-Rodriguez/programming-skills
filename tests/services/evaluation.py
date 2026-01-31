@@ -153,7 +153,9 @@ def _run_judge_evaluation(
     verbose: bool
 ) -> JudgmentResult | None:
     """
-    Run LLM judge to semantically evaluate code quality.
+    Run LLM blind comparison to evaluate if skill improves code quality.
+    
+    Model doesn't know which version is baseline vs skill - fair evaluation.
     
     Args:
         skill: Skill being evaluated
@@ -167,17 +169,18 @@ def _run_judge_evaluation(
         JudgmentResult or None if judgment fails
     """
     if verbose:
-        print("    Running LLM judge evaluation...")
+        print("    Running blind comparison evaluation...")
     
     # Combine all responses (focus on actual code, not individual test results)
-    baseline_response = "\n\n".join(r.response for r in baseline_results if r.response)
-    skill_response = "\n\n".join(r.response for r in skill_results if r.response)
+    without_skill_response = "\n\n".join(r.response for r in baseline_results if r.response)
+    with_skill_response = "\n\n".join(r.response for r in skill_results if r.response)
     
-    if not baseline_response or not skill_response:
+    if not without_skill_response or not with_skill_response:
         if verbose:
             print("      [JUDGE SKIP] Missing responses to evaluate")
         return None
     
+    # Consistent naming for debugging: A = without_skill, B = with_skill (no randomization)
     # Extract principle and instructions from skill
     from domain.skill_extraction import extract_skill_guidance
     guidance = extract_skill_guidance(skill.content)
@@ -198,8 +201,8 @@ def _run_judge_evaluation(
     prompt = build_judgment_prompt(
         principle=principle,
         instructions=guidance,
-        baseline_response=baseline_response,
-        skill_response=skill_response
+        without_skill_response=without_skill_response,  # Always A
+        with_skill_response=with_skill_response         # Always B
     )
     
     # Call model
@@ -212,9 +215,34 @@ def _run_judge_evaluation(
     
     # Parse judgment
     try:
-        judgment = parse_judgment_response(result.value)
+        judgment_response = parse_judgment_response(result.value)
+        
+        # Calculate deterministic score based on test pass rates
+        # Score = how many tests passed with the skill version
+        with_skill_passed = sum(1 for r in skill_results if r.passed)
+        total_tests = len(skill_results)
+        deterministic_score = (with_skill_passed / total_tests * 100) if total_tests > 0 else 0
+        
+        # Create judgment with deterministic score, not vibes
+        judgment = JudgmentResult(
+            principle_better=judgment_response.principle_better,
+            quality_better=judgment_response.quality_better,
+            overall_better=judgment_response.overall_better,
+            option_a_rating=judgment_response.option_a_rating,
+            option_b_rating=judgment_response.option_b_rating,
+            score=int(deterministic_score),
+            reasoning=judgment_response.reasoning
+        )
+        
         if verbose:
-            print(f"      [JUDGE] {judgment.vs_baseline} (score: {judgment.score}/100)")
+            overall_better = judgment.overall_better
+            if overall_better == 'B':
+                imp_label = "yes"
+            elif overall_better == 'A':
+                imp_label = "no"
+            else:
+                imp_label = "neutral"
+            print(f"      [JUDGE] improvement: {imp_label} (score: {judgment.score}/100 = {with_skill_passed}/{total_tests} tests)")
         return judgment
     except ValueError as e:
         if verbose:

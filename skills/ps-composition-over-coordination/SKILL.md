@@ -171,7 +171,6 @@ TEST "pipeline produces correct result":
 
 Focus tests on individual units. Composed behavior emerges automatically if units are correct.
 
-
 ## Related Patterns
 
 - **Single Responsibility Principle**: Each unit does one thing

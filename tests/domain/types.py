@@ -124,6 +124,36 @@ class EvaluationResult:
         """Pure calculation: improvement delta"""
         return self.skill_pass_rate - self.baseline_pass_rate
     
+    @property
+    def baseline_rating(self) -> str:
+        """Categorical rating for baseline, preferring judge's semantic rating"""
+        if self.judgment and self.judgment.option_a_rating:
+            return self.judgment.option_a_rating
+            
+        from .logic import get_rating_label
+        return get_rating_label(self.baseline_pass_rate)
+    
+    @property
+    def skill_rating(self) -> str:
+        """Categorical rating for skill-enhanced, preferring judge's semantic rating"""
+        if self.judgment and self.judgment.option_b_rating:
+            return self.judgment.option_b_rating
+            
+        from .logic import get_rating_label
+        return get_rating_label(self.skill_pass_rate)
+
+    @property
+    def baseline_pass_count(self) -> str:
+        """String representation of baseline pass count: n/N"""
+        passed = sum(1 for r in self.baseline_results if r.passed)
+        return f"{passed}/{len(self.baseline_results)}"
+    
+    @property
+    def skill_pass_count(self) -> str:
+        """String representation of skill pass count: n/N"""
+        passed = sum(1 for r in self.skill_results if r.passed)
+        return f"{passed}/{len(self.skill_results)}"
+
     @staticmethod
     def _calculate_pass_rate(results: tuple[TestResult, ...]) -> int:
         """Policy-Mechanism Separation: Reusable calculation"""

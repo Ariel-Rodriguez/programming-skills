@@ -64,6 +64,7 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
+    parser.add_argument("--results-dir", help="Custom results directory (default: tests/results)")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
@@ -71,7 +72,13 @@ def main() -> int:
     
     # Configuration (Policy)
     skills_dir = Path("skills")
-    results_dir = Path("tests/results")
+    
+    # Support custom results directory for parallel execution
+    if args.results_dir:
+        results_dir = Path(args.results_dir)
+    else:
+        results_dir = Path("tests/results")
+    
     summary_path = results_dir / "summary.json"
     model_name = args.model or "llama3.2:latest"
     provider = Provider.OLLAMA if args.provider == "ollama" else Provider.COPILOT
@@ -174,19 +181,35 @@ def main() -> int:
         all_results.append(eval_result)
         
         # Display results
+        # Use semantic ratings and qualitative labels
+        baseline_rating = eval_result.baseline_rating
+        skill_rating = eval_result.skill_rating
+        baseline_count = eval_result.baseline_pass_count
+        skill_count = eval_result.skill_pass_count
+        
         if eval_result.judgment:
             judge = eval_result.judgment
+            overall_better = judge.overall_better
+            if overall_better == 'B':
+                imp_label = "yes"
+            elif overall_better == 'A':
+                imp_label = "no"
+            else:
+                imp_label = "neutral"
+                
             print(
-                f"  Baseline: {eval_result.baseline_pass_rate}% | "
-                f"With Skill: {eval_result.skill_pass_rate}% | "
-                f"Improvement: {eval_result.improvement:+}%"
+                f"  Without Skill: {baseline_rating} ({baseline_count}) | "
+                f"With Skill: {skill_rating} ({skill_count}) | "
+                f"Improvement: {imp_label}"
             )
-            print(f"  🤖 Judge: {judge.vs_baseline} (score: {judge.score}/100)")
+            skill_won = overall_better == "B"
+            verdict = "✓ Better" if skill_won else ("Equal" if overall_better == "Equal" else "✗ No improvement")
+            print(f"  🤖 Judge: {verdict} (score: {judge.score}/100)")
             print(f"     {judge.reasoning}")
         else:
             print(
-                f"  Baseline: {eval_result.baseline_pass_rate}% | "
-                f"With Skill: {eval_result.skill_pass_rate}% | "
+                f"  Without Skill: {baseline_rating} ({baseline_count}) | "
+                f"With Skill: {skill_rating} ({skill_count}) | "
                 f"Improvement: {eval_result.improvement:+}%"
             )
     
@@ -234,11 +257,13 @@ def main() -> int:
         for r in all_results:
             if r.skill_name in failed_skills:
                 print(f"\n  {r.skill_name}:")
-                print(f"    Baseline: {r.baseline_pass_rate}% ({sum(1 for t in r.baseline_results if t.passed)}/{len(r.baseline_results)} passed)")
+                print(f"    Without Skill: {r.baseline_pass_rate}% ({sum(1 for t in r.baseline_results if t.passed)}/{len(r.baseline_results)} passed)")
                 print(f"    With Skill: {r.skill_pass_rate}% ({sum(1 for t in r.skill_results if t.passed)}/{len(r.skill_results)} passed)")
                 
                 if r.judgment:
-                    print(f"    Judge: {r.judgment.vs_baseline} (score: {r.judgment.score}/100)")
+                    skill_won = r.judgment.overall_better == "B"  # B is always with_skill
+                    verdict = "✓ Better" if skill_won else "✗ No improvement"
+                    print(f"    Judge: {verdict} (score: {r.judgment.score}/100)")
                     print(f"    Reasoning: {r.judgment.reasoning}")
                 
                 # Show test failures

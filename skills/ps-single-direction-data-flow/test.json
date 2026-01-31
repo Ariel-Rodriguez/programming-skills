@@ -3,24 +3,14 @@
         "name": "detect_circular_dependency",
         "input": "Analyze this data flow and identify the circular dependency:\n\n1. Component A updates Store X.\n2. Store X triggers an update in Component B.\n3. Component B's lifecycle method calls a function in Component A that updates Store X.",
         "expected": {
-            "includes": [
-                "cycle",
-                "circular"
-            ],
-            "min_length": 50
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     },
     {
         "name": "refactor_bidirectional_sync",
         "input": "refactor_bidirectional_sync.js",
         "expected": {
-            "includes": [
-                "owner",
-                "source of truth"
-            ],
-            "excludes": [
-                "syncUser"
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     }
 ]

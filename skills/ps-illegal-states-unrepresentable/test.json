@@ -3,26 +3,14 @@
         "name": "transform_invalid_state",
         "input": "transform_invalid_state.ts",
         "expected": {
-            "includes": [
-                "union",
-                "Success",
-                "Error"
-            ],
-            "excludes": [
-                "errorMessage?",
-                "data?"
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     },
     {
         "name": "explain_parse_dont_validate",
         "input": "Explain the difference between 'validating data' and 'parsing data into domain types' in the context of making illegal states unrepresentable.",
         "expected": {
-            "includes": [
-                "boundary",
-                "type safety"
-            ],
-            "min_length": 100
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     }
 ]

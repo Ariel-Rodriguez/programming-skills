@@ -1,0 +1,23 @@
+# CI Configuration for Skill Validation
+# Enable/disable providers and specify models to run in parallel matrix.
+
+ollama:
+  enabled: true
+  local: false
+  context: 32000
+  models:
+    - gpt-oss:20b-cloud
+    - rnj-1:8b-cloud
+    - devstral-small-2:24b-cloud
+
+copilot:
+  enabled: false
+  models:
+    - claude-3-5-sonnet
+    - claude-3-haiku
+
+gemini:
+  enabled: false
+  models:
+    - gemini-1.5-flash
+    - gemini-1.5-pro

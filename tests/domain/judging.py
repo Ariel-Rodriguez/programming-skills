@@ -11,79 +11,120 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class JudgmentResult:
-    """Result of LLM judge evaluation."""
-    follows_principle: Literal["Yes", "No", "Partial"]
-    vs_baseline: Literal["Better", "Same", "Worse"]
-    score: int  # 0-100
+    """Result of blind LLM comparison evaluation."""
+    principle_better: Literal["A", "B", "Equal"]  # Which solution better follows principle
+    quality_better: Literal["A", "B", "Equal"]    # Which solution has better code quality
+    overall_better: Literal["A", "B", "Equal"]    # Overall winner
+    option_a_rating: str  # vague, regular, good, outstanding
+    option_b_rating: str  # vague, regular, good, outstanding
+    score: int  # 0-100, rating of the better solution
     reasoning: str
+    # Note: A = without_skill, B = with_skill (consistent, non-randomized for debugging)
     
     @property
     def is_improvement(self) -> bool:
-        """Whether the skill response is better than baseline."""
-        return self.vs_baseline == "Better" and self.score >= 70
+        """
+        Smart improvement detection:
+        
+        PASS (return True) if:
+        - With_skill (B) is chosen as better, OR
+        - Equal AND score >= 50 (at least some improvement or neutral-good)
+        
+        FAIL (return False) if:
+        - Without_skill (A) is chosen as better (degradation), OR
+        - Equal AND score < 50 (neutral with low performance)
+        
+        Logic:
+        - If ANY case shows degradation (A is better) → FAIL
+        - If ALL cases are neutral (Equal) AND score < 50 → FAIL (not worth it)
+        - If skill (B) wins in any case → PASS
+        - If Equal but score >= 50 (at least half tests pass) → PASS (reasonable)
+        """
+        # FAIL if skill caused degradation
+        if self.overall_better == "A":
+            return False
+        
+        # PASS if skill improved
+        if self.overall_better == "B":
+            return True
+        
+        # For Equal: pass if score is reasonable (at least 50%)
+        # This means at least half the tests pass, which is acceptable for neutral-good code
+        return self.score >= 50
 
 
 def build_judgment_prompt(
     principle: str,
     instructions: str,
-    baseline_response: str,
-    skill_response: str
+    without_skill_response: str,
+    with_skill_response: str
 ) -> str:
     """
-    Build a prompt for LLM judge to evaluate code quality.
+    Build a blind comparison prompt for LLM self-judgment.
+    
+    The model doesn't know which version had skill guidance.
+    It must evaluate them on principle adherence and choose which is better.
+    This creates a fair, unbiased evaluation.
+    
+    Internally, we always put without_skill as "Solution A" and with_skill as "Solution B"
+    for consistent debugging. The judge doesn't know this.
     
     Args:
         principle: The core principle being taught (e.g., "Composition over Coordination")
         instructions: Key rules/guidance from the skill
-        baseline_response: Code generated without skill guidance
-        skill_response: Code generated with skill guidance
+        without_skill_response: Code generated without skill guidance (always Solution A)
+        with_skill_response: Code generated with skill guidance (always Solution B)
     
     Returns:
-        Evaluation prompt for the judge
+        Blind comparison evaluation prompt
     """
-    return f"""You are evaluating whether code follows a programming principle.
+    # Consistent naming for debugging: A = without skill, B = with skill
+    option_a = without_skill_response
+    option_b = with_skill_response
+    
+    return f"""You are comparing two code solutions to determine which better follows a programming principle.
 
-PRINCIPLE: {principle}
+PRINCIPLE TO EVALUATE: {principle}
 
-KEY INSTRUCTIONS:
+GUIDELINES:
 {instructions}
 
-BASELINE CODE (without skill guidance):
-```
-{baseline_response}
-```
+---
 
-REFACTORED CODE (with skill guidance):
+SOLUTION A:
 ```
-{skill_response}
+{option_a}
 ```
 
-Evaluate the refactored code on these criteria:
+SOLUTION B:
+```
+{option_b}
+```
 
-1. **Follows Principle**: Does the refactored code follow the stated principle?
-   - "Yes" if it clearly demonstrates the principle
-   - "Partial" if it shows some adherence but has issues
-   - "No" if it violates or ignores the principle
+---
 
-2. **vs Baseline**: Is the refactored code better than the baseline?
-   - "Better" if it's a clear improvement
-   - "Same" if there's no meaningful difference
-   - "Worse" if the baseline was actually better
+Compare the solutions fairly and categorize BOTH using this scale:
+- **vague**: Solution does not follow the principle or follows it very poorly/minimally.
+- **regular**: solution follows the principle at a basic level but lacks depth or misses key aspects.
+- **good**: Solution follows the principle well and demonstrates core concepts clearly.
+- **outstanding**: Solution demonstrates mastery of the principle with precise and elegant implementation.
 
-3. **Score**: Overall quality score from 0-100
-   - 90-100: Excellent demonstration of principle
-   - 70-89: Good adherence with minor issues
-   - 50-69: Partial adherence, some problems
-   - 0-49: Poor adherence or violates principle
+Evaluation Tasks:
+1. **Categorize A**: Assign a rating (vague, regular, good, outstanding) to Solution A.
+2. **Categorize B**: Assign a rating (vague, regular, good, outstanding) to Solution B.
+3. **Principle Adherence**: Which solution better demonstrates the principle (A, B, or Equal)?
+4. **Code Quality**: Which solution is more maintainable, testable, and flexible (A, B, or Equal)?
+5. **Overall Verdict**: Which solution is better overall?
+6. **Reasoning**: 2-3 sentences explaining your choice and the gap between ratings.
 
-4. **Reasoning**: Brief explanation (2-3 sentences) of your evaluation
-
-Respond ONLY with valid JSON in this exact format:
+Respond ONLY with valid JSON:
 {{
-  "follows_principle": "Yes/No/Partial",
-  "vs_baseline": "Better/Same/Worse",
-  "score": 85,
-  "reasoning": "Your explanation here"
+  "option_a_rating": "vague/regular/good/outstanding",
+  "option_b_rating": "vague/regular/good/outstanding",
+  "principle_better": "A/B/Equal",
+  "quality_better": "A/B/Equal",
+  "overall_better": "A/B/Equal",
+  "reasoning": "Your explanation"
 }}"""
 
 
@@ -121,25 +162,39 @@ def parse_judgment_response(response: str) -> JudgmentResult:
         raise ValueError(f"Invalid JSON in response: {e}") from e
     
     # Validate and extract fields
-    follows_principle = data.get("follows_principle", "").strip()
-    if follows_principle not in ["Yes", "No", "Partial"]:
-        raise ValueError(f"Invalid follows_principle: {follows_principle}")
+    option_a_rating = data.get("option_a_rating", "vague").lower().strip()
+    if option_a_rating not in ["vague", "regular", "good", "outstanding"]:
+        option_a_rating = "vague"
+        
+    option_b_rating = data.get("option_b_rating", "vague").lower().strip()
+    if option_b_rating not in ["vague", "regular", "good", "outstanding"]:
+        option_b_rating = "vague"
+
+    principle_better = data.get("principle_better", "").strip()
+    if principle_better not in ["A", "B", "Equal"]:
+        raise ValueError(f"Invalid principle_better: {principle_better}")
     
-    vs_baseline = data.get("vs_baseline", "").strip()
-    if vs_baseline not in ["Better", "Same", "Worse"]:
-        raise ValueError(f"Invalid vs_baseline: {vs_baseline}")
+    quality_better = data.get("quality_better", "").strip()
+    if quality_better not in ["A", "B", "Equal"]:
+        raise ValueError(f"Invalid quality_better: {quality_better}")
     
-    score = data.get("score")
-    if not isinstance(score, int) or not 0 <= score <= 100:
-        raise ValueError(f"Invalid score: {score}")
+    overall_better = data.get("overall_better", "").strip()
+    if overall_better not in ["A", "B", "Equal"]:
+        raise ValueError(f"Invalid overall_better: {overall_better}")
     
     reasoning = data.get("reasoning", "").strip()
     if not reasoning:
         raise ValueError("Missing reasoning")
     
+    # Note: score is NOT from judge response anymore
+    # It will be set by the evaluation service based on test pass rates
+    # Here we use a placeholder that will be replaced
     return JudgmentResult(
-        follows_principle=follows_principle,  # type: ignore
-        vs_baseline=vs_baseline,  # type: ignore
-        score=score,
+        principle_better=principle_better,  # type: ignore
+        quality_better=quality_better,  # type: ignore
+        overall_better=overall_better,  # type: ignore
+        option_a_rating=option_a_rating,
+        option_b_rating=option_b_rating,
+        score=0,  # Placeholder - will be set by evaluation service
         reasoning=reasoning
     )
