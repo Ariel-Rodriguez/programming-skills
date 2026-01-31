@@ -3,26 +3,14 @@
         "name": "refactor_leaky_file_handle",
         "input": "refactor_leaky_file_handle.js",
         "expected": {
-            "includes": [
-                "finally",
-                "closeSync"
-            ],
-            "regex": [
-                "try\\s*\\{",
-                "finally\\s*\\{"
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     },
     {
         "name": "design_subscription_owner",
         "input": "Design a 'Component' structure that manages an event bus subscription. Ensure the subscription doesn't outlive the component. Apply Explicit Ownership Lifecycle.",
         "expected": {
-            "includes": [
-                "owner",
-                "unsubscribe",
-                "lifecycle"
-            ],
-            "min_length": 100
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     }
 ]

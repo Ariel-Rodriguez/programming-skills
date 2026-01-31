@@ -181,7 +181,9 @@ def main() -> int:
                 f"With Skill: {eval_result.skill_pass_rate}% | "
                 f"Improvement: {eval_result.improvement:+}%"
             )
-            print(f"  🤖 Judge: {judge.vs_baseline} (score: {judge.score}/100)")
+            skill_won = judge.overall_better == ("B" if judge.baseline_is_a else "A")
+            verdict = "✓ Better" if skill_won else "✗ No improvement"
+            print(f"  🤖 Judge: {verdict} (score: {judge.score}/100)")
             print(f"     {judge.reasoning}")
         else:
             print(
@@ -238,7 +240,9 @@ def main() -> int:
                 print(f"    With Skill: {r.skill_pass_rate}% ({sum(1 for t in r.skill_results if t.passed)}/{len(r.skill_results)} passed)")
                 
                 if r.judgment:
-                    print(f"    Judge: {r.judgment.vs_baseline} (score: {r.judgment.score}/100)")
+                    skill_won = r.judgment.overall_better == ("B" if r.judgment.baseline_is_a else "A")
+                    verdict = "✓ Better" if skill_won else "✗ No improvement"
+                    print(f"    Judge: {verdict} (score: {r.judgment.score}/100)")
                     print(f"    Reasoning: {r.judgment.reasoning}")
                 
                 # Show test failures

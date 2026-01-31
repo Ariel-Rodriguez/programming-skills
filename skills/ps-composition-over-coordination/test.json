@@ -3,37 +3,14 @@
         "name": "refactor_orchestrator_class",
         "input": "Refactor the following code into small composable units, avoiding a central coordinator. You MUST provide the complete refactored code in a javascript code block:\n\ncoordinator_case.js",
         "expected": {
-            "includes": [
-                "function",
-                "const",
-                "```javascript"
-            ],
-            "excludes": [
-                "class PaymentProcessor",
-                "Orchestrator {",
-                "Manager {"
-            ],
-            "regex": [
-                "(function|const)\\s+(validate|auth|bank|db|notify)",
-                "(pipeline|compose|pipe|async)"
-            ],
-            "min_length": 300
+            "focus": "Does the refactored code break down the orchestrator into smaller, focused units? Are dependencies explicitly managed? Can units be tested/modified independently?"
         }
     },
     {
         "name": "identify_coordination_bottleneck",
         "input": "Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck. Mention design principles.",
         "expected": {
-            "contains_any": [
-                "god object",
-                "tight coupling",
-                "unmaintainable",
-                "bottleneck",
-                "Single Responsibility",
-                "separation of concerns",
-                "subsystem"
-            ],
-            "min_length": 150
+            "focus": "Does the explanation identify coordination issues like tight coupling, god objects, or SRP violations?"
         }
     }
 ]

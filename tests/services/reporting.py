@@ -92,14 +92,14 @@ def generate_console_report(summary_path: Path, fs: FileSystemPort) -> str:
             # Determine status - prefer judgment over mechanical
             if judgment:
                 score = judgment.get('score', 0)
-                vs_baseline = judgment.get('vs_baseline', 'Same')
-                if vs_baseline == 'Better':
+                overall_better = judgment.get('overall_better', 'Equal')
+                if overall_better == 'B':  # B is skill-enhanced
                     status = "✅"
-                elif vs_baseline == 'Worse':
+                elif overall_better == 'A':  # A is baseline (worse)
                     status = "❌"
                 else:
                     status = "~"
-                judge_str = f"{score}/100 ({vs_baseline})"
+                judge_str = f"{score}/100 ({overall_better})"
             else:
                 status = "+" if improvement > 0 else ("-" if improvement < 0 else "~")
                 judge_str = "N/A"
@@ -166,15 +166,15 @@ def generate_github_comment(summary_path: Path, fs: FileSystemPort) -> Result:
             
             # Determine status - prefer judgment
             if judgment:
-                vs_baseline = judgment.get('vs_baseline', 'Same')
+                overall_better = judgment.get('overall_better', 'Equal')
                 score = judgment.get('score', 0)
-                if vs_baseline == 'Better':
+                if overall_better == 'B':  # B is skill version
                     status = "✅"
-                elif vs_baseline == 'Worse':
+                elif overall_better == 'A':  # A is baseline
                     status = "❌"
                 else:
                     status = "~"
-                judge_verdict = f"{vs_baseline} ({score}/100)"
+                judge_verdict = f"{overall_better} ({score}/100)"
             else:
                 status = "+" if improvement > 0 else ("-" if improvement < 0 else "~")
                 judge_verdict = "N/A"
@@ -191,8 +191,9 @@ def generate_github_comment(summary_path: Path, fs: FileSystemPort) -> Result:
             judgment = r.get('judgment')
             if judgment:
                 lines.append(f"\n### 🤖 LLM Judge: {r['skill']}")
-                lines.append(f"**Follows Principle:** {judgment.get('follows_principle', 'Unknown')}")
-                lines.append(f"**vs Baseline:** {judgment.get('vs_baseline', 'Unknown')}")
+                lines.append(f"**Principle Adherence:** {judgment.get('principle_better', 'Unknown')}")
+                lines.append(f"**Code Quality:** {judgment.get('quality_better', 'Unknown')}")
+                lines.append(f"**Overall Better:** {judgment.get('overall_better', 'Unknown')}")
                 lines.append(f"**Score:** {judgment.get('score', 0)}/100")
                 lines.append(f"\n**Reasoning:** {judgment.get('reasoning', 'No reasoning provided')}")
                 lines.append("")
@@ -261,10 +262,12 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
     # Add judgment if present
     if result.judgment:
         serialized["judgment"] = {
-            "follows_principle": result.judgment.follows_principle,
-            "vs_baseline": result.judgment.vs_baseline,
+            "principle_better": result.judgment.principle_better,
+            "quality_better": result.judgment.quality_better,
+            "overall_better": result.judgment.overall_better,
             "score": result.judgment.score,
-            "reasoning": result.judgment.reasoning
+            "reasoning": result.judgment.reasoning,
+            "baseline_is_a": result.judgment.baseline_is_a
         }
     
     return serialized

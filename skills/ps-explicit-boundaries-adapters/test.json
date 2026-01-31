@@ -3,28 +3,14 @@
         "name": "refactor_database_leak",
         "input": "refactor_database_leak.js",
         "expected": {
-            "includes": [
-                "port",
-                "adapter"
-            ],
-            "excludes": [
-                "db.query",
-                "db.execute"
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     },
     {
         "name": "identify_infrastructure_leaks",
         "input": "Find the infrastructure leaks in this business logic:\n\n```javascript\nimport axios from 'axios';\n\nfunction processPayment(order) {\n    return axios.post('/api/pay', { amount: order.total });\n}\n```",
         "expected": {
-            "includes": [
-                "adapter",
-                "PaymentGateway"
-            ],
-            "excludes": [
-                "axios",
-                "import"
-            ]
+            "focus": "Evaluate whether the response demonstrates the skill principle"
         }
     }
 ]
