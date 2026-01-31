@@ -26,10 +26,19 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
           COMMENT: ${{ github.event.comment.body }}
         run: |
-          python3 ci/orchestrate_evaluations.py "$PR_NUMBER" --matrix-only --filter-provider all > /tmp/matrix.json
+          echo "Generating matrix for PR $PR_NUMBER"
+          python3 ci/orchestrate_evaluations.py "$PR_NUMBER" --matrix-only --filter-provider all > /tmp/matrix.json 2>&1
+          
+          echo "Matrix content:"
+          cat /tmp/matrix.json
+          
+          echo "Setting output..."
           echo "result<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/matrix.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Matrix size:"
+          python3 -c "import json; m=json.load(open('/tmp/matrix.json')); print(f\"{len(m['include'])} jobs\")"
 
   evaluate:
     needs: prepare

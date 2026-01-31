@@ -32,8 +32,9 @@ def validate_environment():
 
 def detect_changes(pr_number: int) -> str:
     """Detect modified skills in PR."""
-    print("\n==> Detecting changes in PR #{}".format(pr_number))
-
+    if not os.environ.get("GITHUB_TOKEN"):
+        return ""
+    
     result = subprocess.run(
         ["python3", "ci/detect_changes.py", str(pr_number)],
         capture_output=True,
@@ -41,25 +42,12 @@ def detect_changes(pr_number: int) -> str:
     )
 
     modified_skills = result.stdout.strip()
-
-    if modified_skills:
-        skill_list = modified_skills.split()
-        print(f"✓ Found {len(skill_list)} modified skill(s): {', '.join(skill_list[:3])}" + 
-              (f" +{len(skill_list)-3} more" if len(skill_list) > 3 else ""))
-    else:
-        print("✓ No skills modified - will test all skills")
-
     return modified_skills
 
 
 def generate_matrix(filter_provider: str = "all", skills: str = "") -> list:
-    """Generate evaluation matrix from configuration with per-skill jobs.
+    """Generate evaluation matrix from configuration with per-skill jobs."""
     
-    If skills are provided, creates one matrix item per skill per model.
-    Otherwise creates one item per model (tests all skills).
-    """
-    print("\n==> Generating evaluation matrix")
-
     result = subprocess.run(
         ["uv", "run", "--with", "pyyaml", "ci/matrix_generator.py", "--filter-provider", filter_provider],
         capture_output=True,
@@ -67,21 +55,19 @@ def generate_matrix(filter_provider: str = "all", skills: str = "") -> list:
     )
 
     if result.returncode != 0:
-        print("❌ Error generating matrix")
-        print(result.stderr)
+        print(f"Error generating matrix: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
     try:
         matrix_data = json.loads(result.stdout)
     except json.JSONDecodeError:
-        print("❌ Error parsing matrix JSON")
-        print(result.stdout)
+        print(f"Error parsing matrix JSON: {result.stdout}", file=sys.stderr)
         sys.exit(1)
 
     items = matrix_data.get("include", [])
 
     if not items:
-        print("❌ Error: No enabled providers in configuration")
+        print("Error: No enabled providers in configuration", file=sys.stderr)
         sys.exit(1)
 
     # If skills are specified, expand matrix to one item per skill per model
@@ -97,13 +83,7 @@ def generate_matrix(filter_provider: str = "all", skills: str = "") -> list:
                 expanded_items.append(expanded_item)
         
         items = expanded_items
-        print(f"✓ Generated matrix with {len(items)} job(s) ({len(items)//len(skill_list)} model(s) × {len(skill_list)} skill(s))")
-    else:
-        print(f"✓ Generated matrix with {len(items)} configuration(s) (all skills per model)")
     
-    for i, item in enumerate(items, 1):
-        print(f"  {i}. {item['display_name']}")
-
     return items
 
 
