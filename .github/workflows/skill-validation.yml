@@ -45,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     
     steps:
@@ -91,7 +92,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ matrix.provider }}-${{ matrix.model }}${{ matrix.skill && format('-{0}', matrix.skill) || '' }}
+          name: results-${{ matrix.provider }}-${{ matrix.model }}-${{ matrix.skill }}
+          name: ${{ format('results-{0}-{1}-{2}', matrix.provider, replace(matrix.model, ':', '-'), matrix.skill || 'all') }}
           path: tests/results/
           retention-days: 1
 
