@@ -4,11 +4,11 @@
 ollama:
   enabled: true
   local: false
-  context: 32000
+  context: 28000
   models:
-    - gpt-oss:20b-cloud
     - rnj-1:8b-cloud
     - devstral-small-2:24b-cloud
+#   - gpt-oss:20b-cloud
 
 copilot:
   enabled: false

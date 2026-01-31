@@ -13,6 +13,7 @@ State must be intentionally designed and always valid. Every piece of state must
 **If you can't state the invariant, the state is already broken.**
 
 Benefits:
+
 - **Reliability**: Impossible states become unrepresentable
 - **Debuggability**: Invalid states eliminated at design time
 - **Maintainability**: Invariants encoded in type system, not documentation
@@ -20,12 +21,14 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Designing state shapes for components or stores
 - Reviewing code with multiple boolean flags
 - Implementing state machines or workflows
 - Designing APIs that manage state
 
 **Indicators you need this:**
+
 - Boolean flag combinations creating invalid states
 - Race conditions from temporarily invalid state
 - Defensive checks scattered throughout codebase
@@ -70,12 +73,14 @@ Benefits:
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Multiple independent boolean flags
 - Undocumented invariants (living in human memory)
 - Temporarily invalid state during updates
 - Optional fields that are only sometimes valid
 
 ✅ **Do:**
+
 - Use discriminated unions for mutually exclusive states
 - Encode invariants in type system
 - Document what must always be true
@@ -108,7 +113,7 @@ FUNCTION render(state):
 // Data exists only in Success state
 ```
 
-*State is explicit. Invalid combinations impossible. Compiler enforces invariants.*
+_State is explicit. Invalid combinations impossible. Compiler enforces invariants._
 
 ### ❌ Bad: Boolean flags allow invalid states
 
@@ -123,7 +128,7 @@ FUNCTION render(state):
     IF state.isLoading AND state.hasError:
         // This shouldn't be possible - but it is!
         RETURN "???"
-    
+
     IF state.data IS NOT null AND state.hasError:
         // Have data AND error? Which to show?
         RETURN "???"
@@ -132,7 +137,7 @@ FUNCTION render(state):
 // 16 possible combinations (2^4), most invalid
 ```
 
-*Flags allow impossible states. No invariants enforced. Defensive checks everywhere.*
+_Flags allow impossible states. No invariants enforced. Defensive checks everywhere._
 
 ## AI Review Checklist
 
@@ -166,7 +171,6 @@ A: Wrap legacy state with adapters that enforce invariants at boundaries.
 - **Type system**: Use discriminated unions to eliminate invalid states
 - **Documentation**: Require explicit invariant statements
 - **Testing**: Verify impossible states truly cannot be created
-
 
 ## Related Patterns
 

@@ -9,10 +9,12 @@ severity: WARN
 ## Principle
 
 Separate what to do (policy) from how to do it (mechanism):
+
 - **Policy**: Business rules, decisions, configuration, strategies
 - **Mechanism**: Reusable implementation, algorithms, infrastructure
 
 Benefits:
+
 - **Flexibility**: Change decisions without touching implementation
 - **Reusability**: Same mechanism serves multiple policies
 - **Clarity**: Business rules explicit and discoverable
@@ -21,12 +23,14 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Business rules are hardcoded in loops or handlers
 - Same logic needs different behaviors in different contexts
 - Rules change frequently but implementation is stable
 - Configuration should be editable without code changes
 
 **Indicators you need this:**
+
 - Magic numbers or strings scattered in code
 - Duplicated logic with slight variations
 - if/else chains encoding business rules
@@ -62,12 +66,14 @@ Benefits:
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Hardcoding business rules in loops
 - Mixing rule definitions with execution logic
 - Duplicating mechanisms to support different policies
 - Making policy changes require code modifications
 
 ✅ **Do:**
+
 - Pass rules as parameters
 - Use configuration objects for policies
 - Keep mechanisms generic and reusable
@@ -107,7 +113,7 @@ FUNCTION retryWithPolicy(operation, policy):
     RETURN result
 ```
 
-*Rules defined separately. Mechanism is reusable. Easy to test independently.*
+_Rules defined separately. Mechanism is reusable. Easy to test independently._
 
 ### ❌ Bad: Policy hardcoded in mechanism
 
@@ -132,21 +138,22 @@ FUNCTION fetchWithRetry(url):
 // Changing rules requires code changes
 ```
 
-*Business rules scattered in code. Cannot reuse. Must modify code to change policy.*
+_Business rules scattered in code. Cannot reuse. Must modify code to change policy._
 
 ## Testing Strategy
 
 **Test mechanism:**
+
 ```
 TEST "executes correctly with policy A":
     // Arrange
     data = createTestData()
     policyA = createPolicyA()
     expectedA = createExpectedResultA()
-    
+
     // Act
     result = mechanism(data, policyA)
-    
+
     // Assert
     ASSERT result EQUALS expectedA
 
@@ -155,20 +162,21 @@ TEST "executes correctly with policy B":
     data = createTestData()
     policyB = createPolicyB()
     expectedB = createExpectedResultB()
-    
+
     // Act
     result = mechanism(data, policyB)
-    
+
     // Assert
     ASSERT result EQUALS expectedB
 ```
 
 **Test policy:**
+
 ```
 TEST "policy defines correct rules":
     // Arrange
     retryPolicy = createRetryPolicy()
-    
+
     // Act & Assert
     ASSERT retryPolicy.maxAttempts EQUALS 3
     ASSERT retryPolicy.backoffMs EQUALS 1000
@@ -177,6 +185,7 @@ TEST "policy defines correct rules":
 ## Enforcement
 
 **Code review checklist:**
+
 - [ ] Are business rules defined separately from implementation?
 - [ ] Can rules change without modifying mechanism code?
 - [ ] Is the mechanism reusable with different policies?
@@ -184,6 +193,7 @@ TEST "policy defines correct rules":
 - [ ] Could this logic serve other use cases with different rules?
 
 **Red flags:**
+
 - Magic numbers in loops or conditionals
 - Similar functions differing only in constants
 - Comments explaining "business rule: X"
@@ -192,6 +202,7 @@ TEST "policy defines correct rules":
 ## Practical Patterns
 
 ### Configuration Object Pattern
+
 ```
 // Policy
 const validationRules = {
@@ -205,6 +216,7 @@ function validate(input, rules) { /* ... */ }
 ```
 
 ### Strategy Pattern
+
 ```
 // Policies
 const strategies = {
@@ -219,6 +231,7 @@ function apply(data, strategy) {
 ```
 
 ### Rule Definition Pattern
+
 ```
 // Policy
 const discountRules = [
@@ -231,7 +244,6 @@ function applyRules(data, rules) {
   return rules.find(r => r.condition(data));
 }
 ```
-
 
 ## Related Patterns
 

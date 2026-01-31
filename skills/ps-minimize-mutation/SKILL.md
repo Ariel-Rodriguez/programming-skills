@@ -9,11 +9,13 @@ severity: WARN
 ## Principle
 
 Mutation should be:
+
 - **Localized**: Confined to small, clear scopes
 - **Explicit**: Visible at call sites when mutation occurs
 - **Controlled**: Used only when beneficial for performance or clarity
 
 Benefits:
+
 - **Predictability**: Easier to reason about code when values don't change unexpectedly
 - **Thread Safety**: Immutable data is inherently safe for concurrent access
 - **Debugging**: Fewer moving parts, simpler data flow
@@ -22,12 +24,14 @@ Benefits:
 ## When to Use
 
 **Use this skill when:**
+
 - Reviewing code with shared mutable state
 - Functions modify their arguments unexpectedly
 - Objects change state across multiple locations
 - Tracking down bugs related to unexpected data changes
 
 **Indicators you need this:**
+
 - Functions with surprising side effects
 - Collections modified while being iterated
 - Object properties changed far from creation
@@ -39,6 +43,7 @@ Benefits:
 ### Prefer Immutable Updates
 
 **Create new values instead of modifying existing ones:**
+
 - Return new collections rather than mutating inputs
 - Use spread operators, Object.assign, or copy methods
 - Build new objects with updated properties
@@ -46,6 +51,7 @@ Benefits:
 ### Localize Mutation When Necessary
 
 **When mutation is appropriate (performance, builder patterns):**
+
 - Keep mutations within a single function scope
 - Don't expose mutable references outside the scope
 - Return immutable results to callers
@@ -53,6 +59,7 @@ Benefits:
 ### Make Mutation Explicit
 
 **Signal mutation at function boundaries:**
+
 - Name functions to indicate mutation (update, modify, add)
 - Document when parameters are mutated
 - Avoid mutating function parameters received from callers
@@ -60,6 +67,7 @@ Benefits:
 ### Acceptable Mutation Contexts
 
 **Mutation is reasonable when:**
+
 - Building large data structures incrementally (builders)
 - Performance-critical loops processing arrays
 - Local variables within a function (not escaping scope)
@@ -67,6 +75,7 @@ Benefits:
 - Managing UI component state
 
 **Mutation should be avoided when:**
+
 - Functions operate on shared data structures
 - Arguments could be reused by the caller
 - The mutation affects code outside current scope
@@ -87,7 +96,7 @@ FUNCTION addItem(cart, newItem):
 FUNCTION removeItem(cart, itemId):
     updatedItems = cart.items.filter(item => item.id !== itemId)
     updatedTotal = updatedItems.sum(item => item.price)
-    
+
     RETURN {
         ...cart,
         items: updatedItems,
@@ -99,7 +108,7 @@ FUNCTION removeItem(cart, itemId):
 // Caller decides what to do with result
 ```
 
-*Functions create new values. Original data preserved. Safe for concurrent access.*
+_Functions create new values. Original data preserved. Safe for concurrent access._
 
 ### ❌ Bad: Mutation scattered
 
@@ -112,7 +121,7 @@ FUNCTION addItem(cart, newItem):
 FUNCTION processOrder(cart):
     addItem(cart, { id: 1, price: 10 })  // Mutates cart
     addItem(cart, { id: 2, price: 20 })  // Mutates cart again
-    
+
     // Later... is cart the original or modified?
     // Which functions modified it?
     // Hard to track changes
@@ -122,30 +131,34 @@ FUNCTION processOrder(cart):
 // Hard to test or reason about
 ```
 
-*Functions modify shared state. Caller's data changed without clear signal. Race conditions possible.*
+_Functions modify shared state. Caller's data changed without clear signal. Race conditions possible._
 
 ## Common Patterns
 
 ### Immutable Collection Updates
 
 **Arrays:**
+
 - Add: `[...array, newItem]`
 - Remove: `array.filter(item => item !== toRemove)`
 - Update: `array.map(item => item.id === id ? updated : item)`
 - Slice: `array.slice(start, end)`
 
 **Objects:**
+
 - Add/Update property: `{...obj, key: newValue}`
 - Remove property: `{...obj}; delete result.key` or use destructuring
 - Nested update: `{...obj, nested: {...obj.nested, key: value}}`
 
 **Maps/Sets:**
+
 - Create new instances with changes
 - Or use within a local scope and return frozen copy
 
 ### Builder Pattern for Complex Construction
 
 When building complex objects step-by-step:
+
 - Use a builder class with mutation methods
 - Return immutable result from `.build()` method
 - Builder is local, result is shared immutably
@@ -219,7 +232,6 @@ A: Use spreading at each level, or use libraries like Immer (JS), lenses (functi
 
 **Q: What about builder patterns?**  
 A: Builders are fine—they use mutation internally but expose an immutable interface. The builder itself is transient and local.
-
 
 ## References
 

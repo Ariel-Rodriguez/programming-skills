@@ -9,185 +9,120 @@ permissions:
   contents: read
 
 jobs:
-  # Job 1: Generate matrix from config
   prepare:
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/test') && github.actor == 'Ariel-Rodriguez'
     outputs:
-      matrix: ${{ steps.generate-matrix.outputs.matrix }}
-      filter: ${{ steps.parse.outputs.filter }}
-      use-parallel: ${{ steps.parse.outputs.use-parallel }}
-    
+      matrix: ${{ steps.matrix.outputs.result }}
+
     steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
       - name: Parse test command
-        id: parse
+        id: command
         run: |
-          COMMENT="${{ github.event.comment.body }}"
-          FILTER="all"
-          USE_PARALLEL="false"
-          
-          # Check for specific provider filter
-          if echo "$COMMENT" | grep -q "/test copilot"; then
-            FILTER="copilot"
-          elif echo "$COMMENT" | grep -q "/test ollama"; then
-            FILTER="ollama"
-          elif echo "$COMMENT" | grep -q "/test gemini"; then
-            FILTER="gemini"
-          elif echo "$COMMENT" | grep -q "/test all"; then
-            FILTER="all"
+          SKILLS=$(python3 ci/parse_test_command.py "${{ github.event.comment.body }}")
+          echo "skills=$SKILLS" >> $GITHUB_OUTPUT
+          if [ -n "$SKILLS" ]; then
+            echo "Override skills: $SKILLS"
+          else
+            echo "Auto-detecting changed skills..."
           fi
-          
-          # Check for parallel flag
-          if echo "$COMMENT" | grep -q "parallel"; then
-            USE_PARALLEL="true"
-          fi
-          
-          echo "filter=$FILTER" >> $GITHUB_OUTPUT
-          echo "use-parallel=$USE_PARALLEL" >> $GITHUB_OUTPUT
-          echo "Testing with filter: $FILTER (parallel: $USE_PARALLEL)"
-      
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install PyYAML
-        run: pip install pyyaml
 
       - name: Generate matrix
-        id: generate-matrix
+        id: matrix
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          MATRIX=$(python3 ci/matrix_generator.py --filter-provider "${{ steps.parse.outputs.filter }}")
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-          echo "Generated matrix:"
-          echo "$MATRIX" | jq .
+          python3 ci/generate_matrix.py "$PR_NUMBER" ${{ steps.command.outputs.skills }} > /tmp/matrix.json
 
-  # Job 2: Run evaluations (parallel or sequential based on parse)
+          echo "result<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/matrix.json >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          python3 -c "import json; m=json.load(open('/tmp/matrix.json')); print(f'Generated {len(m[\"include\"])} jobs')"
+
   evaluate:
     needs: prepare
     runs-on: ubuntu-latest
-    if: needs.prepare.outputs.use-parallel == 'false'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Copilot CLI
-        run: npm install -g @github/copilot
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.11
-
-      - name: Run orchestration
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-        run: |
-          chmod +x ci/*.sh
-          ./ci/orchestrate_evaluations.sh ${{ github.event.issue.number }} --filter-provider "${{ needs.prepare.outputs.filter }}"
-
-      - name: Post results
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: always() && hashFiles('comment.md') != ''
-        with:
-          number: ${{ github.event.issue.number }}
-          path: comment.md
-
-  # Job 3: Run evaluations in parallel (matrix strategy)
-  evaluate-parallel:
-    needs: prepare
-    runs-on: ubuntu-latest
-    if: needs.prepare.outputs.use-parallel == 'true'
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        if: matrix.provider == 'copilot'
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Copilot CLI
         if: matrix.provider == 'copilot'
         run: npm install -g @github/copilot
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install 3.11
-
-      - name: Detect changes
-        id: changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set artifact name
+        id: artifact
         run: |
-          chmod +x ci/detect_changes.sh
-          MODIFIED_SKILLS=$(./ci/detect_changes.sh ${{ github.event.issue.number }})
-          echo "modified_skills=$MODIFIED_SKILLS" >> $GITHUB_OUTPUT
+          ARTIFACT_NAME="results-${{ matrix.provider }}-${{ matrix.model }}-${{ matrix.skill || 'all' }}"
+          ARTIFACT_NAME="${ARTIFACT_NAME//:/--}"
+          echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
-      - name: Run evaluation for ${{ matrix.display_name }}
+      - name: Evaluate ${{ matrix.display_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-          MODIFIED_SKILLS: ${{ steps.changes.outputs.modified_skills }}
         run: |
-          chmod +x ci/run_evaluation.sh
-          ./ci/run_evaluation.sh "${{ matrix.provider }}" "${{ matrix.model }}" 50 "${{ matrix.extra_args }}"
+          CMD="uv run --project tests --frozen tests/evaluator.py"
+          CMD="$CMD --provider ${{ matrix.provider }}"
+          CMD="$CMD --model ${{ matrix.model }}"
+          CMD="$CMD --judge --verbose --report --threshold 50"
+
+          if [ -n "${{ matrix.extra_args }}" ]; then
+            CMD="$CMD ${{ matrix.extra_args }}"
+          fi
+
+          if [ -n "${{ matrix.skill }}" ]; then
+            CMD="$CMD --skill ${{ matrix.skill }}"
+          else
+            CMD="$CMD --all"
+          fi
+
+          echo "Running: $CMD"
+          eval "$CMD"
 
       - name: Upload results
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: results-${{ matrix.provider }}-${{ matrix.model }}
-          path: tests/results/${{ matrix.provider }}/${{ matrix.model }}/
+          name: ${{ steps.artifact.outputs.name }}
+          path: tests/results/
+          retention-days: 1
 
-  # Job 4: Consolidate parallel results
   consolidate:
-    needs: [prepare, evaluate-parallel]
+    needs: evaluate
     runs-on: ubuntu-latest
-    if: needs.prepare.outputs.use-parallel == 'true' && always()
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    if: always()
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
           path: tests/results/
 
       - name: Consolidate results
-        run: |
-          chmod +x ci/consolidate_results.sh
-          ./ci/consolidate_results.sh || true
+        run: python3 ci/consolidate_results.py
 
-      - name: Post consolidated results
+      - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2
         if: hashFiles('comment.md') != ''
         with:

@@ -152,8 +152,8 @@ def main():
     if len(matrix["include"]) == 0:
         print("Warning: No enabled providers match filter criteria", file=sys.stderr)
     
-    # Output as JSON
-    print(json.dumps(matrix, indent=2))
+    # Output ONLY JSON (no extra output to stdout)
+    print(json.dumps(matrix))
 
 
 if __name__ == "__main__":
