@@ -15,3 +15,7 @@
 *.gif binary
 *.ico binary
 *.pdf binary
+
+# Ignore generated artifacts in archives
+comment.md export-ignore
+results export-ignore
