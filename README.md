@@ -1,74 +1,84 @@
 # Programming Skills
 
-**Version:** 2.2.0
+Language-agnostic AI agent skills that enforce fundamental programming principles. This repository provides specific, granular instructions that enable AI coding assistants to produce significantly higher-quality code that adheres to robust engineering standards.
 
-Language-agnostic AI agent skills that enforce fundamental programming principles across Cursor, Antigravity, GitHub Copilot, and other AI coding assistants.
+Adopting these skills measurably changes the output of AI models, shifting them from generating merely functional code to producing architecturally sound solutions.
 
-## Quick Start
+## Table of Contents
 
-```bash
-# Linux/macOS - Cursor/Antigravity
-curl -L https://github.com/Ariel-Rodriguez/programming-skills/releases/latest/download/cursor-antigravity.zip -o skills.zip && unzip skills.zip -d .cursor/skills && rm skills.zip
+- [Installation](#installation)
+- [How it Works](#how-it-works)
+- [Validation & Testing](#validation--testing)
+- [Evaluation Results](#evaluation-results)
+- [Documentation](#documentation)
+- [License](#license)
 
-# Windows (PowerShell) - Cursor/Antigravity
-Invoke-WebRequest -Uri "https://github.com/Ariel-Rodriguez/programming-skills/releases/latest/download/cursor-antigravity.zip" -OutFile "skills.zip"; Expand-Archive -Path "skills.zip" -DestinationPath ".cursor\skills" -Force; Remove-Item "skills.zip"
-```
+## Installation
 
-[Manual installation & more options →](docs/contributing.md#adding-a-new-skill)
+Select your platform for specific setup instructions:
 
-## Skills Overview
+- [Cursor](docs/install/cursor.md)
+- [Antigravity](docs/install/antigravity.md)
+- [GitHub Copilot](docs/install/copilot.md)
+- [Claude](docs/install/claude.md)
 
-| # | Skill | Category | Purpose |
-|---|-------|----------|---------|
-| 1 | [Functional Core / Imperative Shell](skills/ps-functional-core-imperative-shell/) | Core | Separate pure logic from effects |
-| 2 | [Explicit State Invariants](skills/ps-explicit-state-invariants/) | Core | Design state with clear invariants |
-| 3 | [Single Direction Data Flow](skills/ps-single-direction-data-flow/) | Core | Unidirectional data flow |
-| 4 | [Explicit Boundaries & Adapters](skills/ps-explicit-boundaries-adapters/) | Design | Isolate frameworks |
-| 5 | [Local Reasoning](skills/ps-local-reasoning/) | Design | Understandable locally |
-| 6 | [Naming as Design](skills/ps-naming-as-design/) | Design | Intent-revealing names |
-| 7 | [Error Handling Design](skills/ps-error-handling-design/) | Design | Model errors explicitly |
-| 8 | [Policy/Mechanism Separation](skills/ps-policy-mechanism-separation/) | Design | Separate what from how |
-| 9 | [Explicit Ownership Lifecycle](skills/ps-explicit-ownership-lifecycle/) | Design | Clear resource ownership |
-| 10 | [Minimize Mutation](skills/ps-minimize-mutation/) | Design | Control mutation |
-| 11 | [Composition Over Coordination](skills/ps-composition-over-coordination/) | Refinement | Compose, don't orchestrate |
-| 12 | [Illegal States Unrepresentable](skills/ps-illegal-states-unrepresentable/) | Refinement | Prevent misuse structurally |
+## How it Works
 
-## 📖 Documentation
+The core of this repository is the `skills/` directory. Each skill is encapsulated in its own subdirectory following the `ps-<name>` convention (e.g., `ps-composition-over-coordination`).
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | Repository design & structure |
-| [Contributing](docs/contributing.md) | How to add/modify skills & benchmarks |
-| [AI Prompt Wrapper](docs/ai-prompt-wrapper.md) | Configure your AI assistant |
-| [Changelog](CHANGELOG.md) | Version history & skill changes |
-| [Benchmarks](tests/) | Evaluate AI models against skills |
+We use this granular structure because:
+1.  **Focus**: It allows the AI to load only the relevant context for a specific task, avoiding context window pollution.
+2.  **Modularity**: Skills can be improved, versioned, and tested independently.
+3.  **Composability**: Users can select the specific combination of principles they want to enforce for their project.
 
-## Supported Platforms
+## Validation & Testing
 
-- ✅ **Cursor** 2.4+
-- ✅ **Antigravity**
-- ✅ **GitHub Copilot**
-- ✅ Any Agent Skills compatible tool
+Every skill is validated against a rigorous testing suite found in the `tests/` directory.
 
-## Contributing
+- **Automated Judging**: We use an LLM-as-a-Judge approach. The system compares the output of a "Baseline" model (without the skill) against a "Skill" model (with the skill loaded).
+- **Semantics over Syntax**: The test does not just look for passing unit tests; it analyzes the *logic* and *structure* of the code.
+- **Evidence-Based**: The judge identifies the specific lines of code that demonstrate adherence to or violation of the principle.
 
-```bash
-# Add a new skill
-mkdir skills/ps-my-new-skill
-# Create SKILL.md with pseudocode examples
-# Submit PR
-```
+[Read our Case Study on Judge Fairness](docs/judge-fairness-case-study.md) to see how the system fairly evaluates architectural quality, even when it means failing the Skill model.
 
-See [Contributing Guide](docs/contributing.md) for details.
+## Evaluation Results
+
+Processed 24 evaluation(s).
+
+| Test Name | Model | Baseline | With Skill | Cases Pass | Winner |
+|-----------|-------|----------|------------|------------|--------|
+| [results-ollama-devstral-small-2--24b-cloud-ps-composition-over-coordination](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329534502) | devstral-small-2:24b-cloud | good | good | ✅ 2/2 | N/A |
+| [results-ollama-devstral-small-2--24b-cloud-ps-error-handling-design](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329534340) | devstral-small-2:24b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-explicit-boundaries-adapters](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329535854) | devstral-small-2:24b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-explicit-ownership-lifecycle](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329535894) | devstral-small-2:24b-cloud | good | good | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-explicit-state-invariants](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329537422) | devstral-small-2:24b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-functional-core-imperative-shell](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329537046) | devstral-small-2:24b-cloud | regular | good | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-illegal-states-unrepresentable](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329538523) | devstral-small-2:24b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-local-reasoning](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329538780) | devstral-small-2:24b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-minimize-mutation](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329540068) | devstral-small-2:24b-cloud | good | good | ✅ 2/2 | N/A |
+| [results-ollama-devstral-small-2--24b-cloud-ps-naming-as-design](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329540040) | devstral-small-2:24b-cloud | regular | good | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-policy-mechanism-separation](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329541792) | devstral-small-2:24b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-devstral-small-2--24b-cloud-ps-single-direction-data-flow](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329541535) | devstral-small-2:24b-cloud | regular | good | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-composition-over-coordination](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329524580) | rnj-1:8b-cloud | outstanding | good | ❌ 2/2 | Baseline |
+| [results-ollama-rnj-1--8b-cloud-ps-error-handling-design](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329524126) | rnj-1:8b-cloud | vague | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-explicit-boundaries-adapters](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329526125) | rnj-1:8b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-explicit-ownership-lifecycle](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329526263) | rnj-1:8b-cloud | good | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-explicit-state-invariants](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329528479) | rnj-1:8b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-functional-core-imperative-shell](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329527817) | rnj-1:8b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-illegal-states-unrepresentable](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329529527) | rnj-1:8b-cloud | outstanding | outstanding | ✅ 2/2 | N/A |
+| [results-ollama-rnj-1--8b-cloud-ps-local-reasoning](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329529241) | rnj-1:8b-cloud | vague | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-minimize-mutation](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329531124) | rnj-1:8b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-naming-as-design](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329531393) | rnj-1:8b-cloud | vague | good | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-policy-mechanism-separation](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329532599) | rnj-1:8b-cloud | regular | outstanding | ✅ 2/2 | With Skill |
+| [results-ollama-rnj-1--8b-cloud-ps-single-direction-data-flow](https://github.com/Ariel-Rodriguez/programming-skills/actions/runs/21547621647/artifacts/5329532551) | rnj-1:8b-cloud | vague | good | ✅ 2/2 | With Skill |
+
+## Documentation
+
+- [Architecture](docs/architecture.md) - Repository design & structure
+- [Contributing](docs/contributing.md) - How to add/modify skills & benchmarks
+- [AI Prompt Wrapper](docs/ai-prompt-wrapper.md) - Configure your AI assistant
+- [Changelog](CHANGELOG.md) - Version history & skill changes
 
 ## License
 
 MIT License - see [LICENSE](LICENSE)
-
-## Credits
-
-Principles derived from *Programming: Principles and Practice Using C++* and *A Tour of C++* by Bjarne Stroustrup, adapted for AI-assisted development.
-
----
-
-**Repository:** https://github.com/Ariel-Rodriguez/programming-skills

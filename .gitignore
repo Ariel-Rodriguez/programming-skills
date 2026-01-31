@@ -43,3 +43,7 @@ generated-*
 temp-*
 scratch-*
 *.zip
+
+# CI/Validation Artifacts
+comment.md
+results/

@@ -1,10 +1,9 @@
 [project]
-name = "skills-benchmarks"
+name = "programming-skills-validation"
 version = "0.1.0"
-description = "Benchmarks for programming skills using upskill"
+description = "Validation suite for Programming Skills"
 requires-python = ">=3.11"
 dependencies = [
-    "upskill>=0.1.0",
     "pyyaml>=6.0",
 ]
 

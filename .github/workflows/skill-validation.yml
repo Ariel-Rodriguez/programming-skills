@@ -16,13 +16,23 @@ jobs:
       matrix: ${{ steps.matrix.outputs.result }}
 
     steps:
+      # Checkout trusted scripts from main
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted-scripts
+
+      # Checkout PR code (for context, though prepare mainly uses scripts)
+      - uses: actions/checkout@v4
+        with:
+          path: workspace
+
       - uses: astral-sh/setup-uv@v5
 
       - name: Parse test command
         id: command
         run: |
-          SKILLS=$(python3 ci/parse_test_command.py "${{ github.event.comment.body }}")
+          SKILLS=$(python3 trusted-scripts/ci/parse_test_command.py "${{ github.event.comment.body }}")
           echo "skills=$SKILLS" >> $GITHUB_OUTPUT
           if [ -n "$SKILLS" ]; then
             echo "Override skills: $SKILLS"
@@ -36,7 +46,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          python3 ci/generate_matrix.py "$PR_NUMBER" ${{ steps.command.outputs.skills }} > /tmp/matrix.json
+          # Run from workspace root but use trusted script
+          cd workspace
+          python3 ../trusted-scripts/ci/generate_matrix.py "$PR_NUMBER" ${{ steps.command.outputs.skills }} > /tmp/matrix.json
 
           echo "result<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/matrix.json >> $GITHUB_OUTPUT
@@ -53,6 +65,13 @@ jobs:
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
+      # Checkout trusted scripts again (new job)
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted-scripts
+
+      # Checkout actual PR code to test
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -80,24 +99,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          TRULENS_OTEL_ENDPOINT: ${{ secrets.TRULENS_OTEL_ENDPOINT }}
         run: |
-          CMD="uv run --project tests --frozen tests/evaluator.py"
-          CMD="$CMD --provider ${{ matrix.provider }}"
-          CMD="$CMD --model ${{ matrix.model }}"
-          CMD="$CMD --judge --verbose --report --threshold 50"
-
+          # Construct arguments array for safety
+          ARGS=(--provider "${{ matrix.provider }}" --model "${{ matrix.model }}" --judge --verbose --report --threshold 50)
+          
           if [ -n "${{ matrix.extra_args }}" ]; then
-            CMD="$CMD ${{ matrix.extra_args }}"
+            # Split extra_args safely if needed, but for now assuming simple flags
+            ARGS+=(${{ matrix.extra_args }})
           fi
 
           if [ -n "${{ matrix.skill }}" ]; then
-            CMD="$CMD --skill ${{ matrix.skill }}"
+            ARGS+=(--skill "${{ matrix.skill }}")
           else
-            CMD="$CMD --all"
+            ARGS+=(--all)
           fi
 
-          echo "Running: $CMD"
-          eval "$CMD"
+          echo "Running evaluation..."
+          # Use trusted script
+          uv run --project trusted-scripts/tests --frozen trusted-scripts/tests/evaluator.py "${ARGS[@]}"
 
       - name: Upload results
         if: always()
@@ -113,14 +133,18 @@ jobs:
     if: always()
 
     steps:
+      # Checkout trusted scripts for consolidation logic
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: trusted-scripts
 
       - uses: actions/download-artifact@v4
         with:
           path: tests/results/
 
       - name: Consolidate results
-        run: python3 ci/consolidate_results.py
+        run: python3 trusted-scripts/ci/consolidate_results.py
 
       - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2
