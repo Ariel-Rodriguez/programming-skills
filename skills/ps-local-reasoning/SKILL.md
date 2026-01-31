@@ -11,6 +11,7 @@ severity: WARN
 Code should be understandable by reading it in isolation, without jumping to other files or searching for hidden dependencies.
 
 Benefits:
+
 - **Readability**: Understanding requires minimal context switching
 - **Maintainability**: Changes are predictable and safe
 - **Debugging**: Problem source is immediately visible
@@ -19,12 +20,14 @@ Benefits:
 ## When to Use
 
 **Use this skill when:**
+
 - Writing functions that depend on external data
 - Reviewing code with unclear data sources
 - Refactoring code with scattered dependencies
 - Debugging issues caused by hidden state
 
 **Indicators you need this:**
+
 - Must trace through multiple files to understand a function
 - Function behavior changes based on global state
 - Dependencies are implicit (imported modules, globals)
@@ -70,6 +73,7 @@ Benefits:
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Reading from global state inside functions
 - Importing config deep in logic
 - Hidden dependencies through closures
@@ -77,6 +81,7 @@ Benefits:
 - Accessing outer scope unnecessarily
 
 ✅ **Do:**
+
 - Pass everything the function needs as parameters
 - Make external dependencies obvious
 - Keep function scope self-contained
@@ -90,10 +95,10 @@ Benefits:
 ```
 FUNCTION calculateDiscount(order, pricingRules, customerTier):
     basePrice = order.items.sum(item => item.price)
-    
+
     tierMultiplier = pricingRules.getTierMultiplier(customerTier)
     discount = basePrice * tierMultiplier
-    
+
     RETURN basePrice - discount
 
 // Everything needed is in parameters
@@ -101,7 +106,7 @@ FUNCTION calculateDiscount(order, pricingRules, customerTier):
 // Easy to test - just pass values
 ```
 
-*Function signature reveals all dependencies. Fully understandable in isolation.*
+_Function signature reveals all dependencies. Fully understandable in isolation._
 
 ### ❌ Bad: Hidden dependencies
 
@@ -111,11 +116,11 @@ IMPORT { pricingService } from "services"
 
 FUNCTION calculateDiscount(order):
     basePrice = order.items.sum(item => item.price)
-    
+
     customerTier = getCurrentUser().tier  // Where does this come from?
     tierMultiplier = pricingService.getTier(customerTier)  // Global import
     discount = basePrice * tierMultiplier * config.discountFactor  // Global config
-    
+
     RETURN basePrice - discount
 
 // Must read 3+ other files to understand
@@ -124,7 +129,7 @@ FUNCTION calculateDiscount(order):
 // config - what value is this?
 ```
 
-*Cannot understand without hunting through imports. Hidden dependencies make testing hard.*
+_Cannot understand without hunting through imports. Hidden dependencies make testing hard._
 
 ## Review Checklist
 
@@ -145,6 +150,7 @@ Before accepting code, verify:
 ### Dependency Injection
 
 Instead of importing dependencies directly, accept them as parameters:
+
 - Pass configuration objects as arguments
 - Inject services rather than importing singletons
 - Accept callbacks for side effects
@@ -152,6 +158,7 @@ Instead of importing dependencies directly, accept them as parameters:
 ### Pure Function Default
 
 Make functions pure by default:
+
 - All inputs via parameters
 - All outputs via return value
 - No side effects unless absolutely necessary
@@ -159,6 +166,7 @@ Make functions pure by default:
 ### Explicit Context
 
 When context is needed, pass it explicitly:
+
 - Request/response objects as parameters
 - User context as explicit argument
 - Transaction context passed down
@@ -166,6 +174,7 @@ When context is needed, pass it explicitly:
 ### Colocation
 
 Keep related code together:
+
 - Helper functions near usage
 - Type definitions with implementations
 - Validation with data structures
@@ -173,18 +182,21 @@ Keep related code together:
 ## Language-Specific Patterns
 
 ### JavaScript/TypeScript
+
 - Use function parameters over closure scope
 - Prefer dependency injection over module imports
 - Avoid ambient global access (process.env directly)
 - Use TypeScript interfaces to make dependencies explicit
 
 ### Python
+
 - Use function arguments instead of module-level variables
 - Avoid mutable module state
 - Pass config objects explicitly
 - Use type hints to document dependencies
 
 ### Others
+
 - Java: Constructor injection over field access
 - C#: Dependency injection containers
 - Go: Explicit context passing
@@ -203,7 +215,6 @@ A: Start simple with explicit parameters. The principle is making dependencies v
 
 **Q: How do I handle ambient context like user authentication?**  
 A: Pass user/session context explicitly through the call chain, or use a request context object. Don't rely on thread-local or global state.
-
 
 ## Related Patterns
 

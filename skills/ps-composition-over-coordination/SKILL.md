@@ -11,6 +11,7 @@ severity: SUGGEST
 Build complex systems by combining simple, focused units that work together through interfaces, not through centralized coordinators that orchestrate every detail.
 
 Benefits:
+
 - **Modularity**: Each unit has one clear responsibility
 - **Testability**: Small units test in isolation
 - **Flexibility**: Swap or extend units without affecting others
@@ -19,12 +20,14 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Functions exceed 50 lines by orchestrating multiple steps
 - Classes have "Manager", "Coordinator", "Orchestrator" in names
 - Adding features requires changing central control flow
 - Objects know too much about others' internal details
 
 **Indicators you need this:**
+
 - God objects with 10+ methods
 - Manager classes that just delegate
 - Deep call chains: `a.getB().getC().doX()`
@@ -53,6 +56,7 @@ Benefits:
 ### Structure guidelines
 
 ✅ **Do:**
+
 - Create small, focused functions/classes
 - Compose behavior from simple units
 - Let structure express the algorithm
@@ -60,6 +64,7 @@ Benefits:
 - Build pipelines and chains
 
 ❌ **Avoid:**
+
 - Centralized managers that know everything
 - Methods that orchestrate 5+ operations
 - Objects that reach into other objects' internals
@@ -84,7 +89,7 @@ FUNCTION processOrder(order):
     RETURN createInvoice(order, finalPrice)
 ```
 
-*Each function has one clear job. They compose naturally without coordination.*
+_Each function has one clear job. They compose naturally without coordination._
 
 ### ❌ Bad: Central coordinator
 
@@ -95,33 +100,37 @@ CLASS OrderManager:
         subtotal = 0
         FOR EACH item IN items:
             subtotal = subtotal + item.getPrice()
-        
+
         IF order.hasDiscount():
             discount = subtotal * 0.1
             subtotal = subtotal - discount
-        
+
         invoice = NEW Invoice()
         invoice.setOrder(order)
         invoice.setAmount(subtotal)
         this.invoiceRepository.save(invoice)
-        
+
         RETURN invoice
 ```
 
-*One large method coordinates everything. Hard to test, modify, or reuse parts.*
+_One large method coordinates everything. Hard to test, modify, or reuse parts._
 
 ## Common Anti-Patterns
 
 ### God Objects
+
 Classes that do too much. Split into focused units that compose.
 
 ### Manager/Coordinator Classes
+
 Classes that only delegate. Push behavior into the units themselves.
 
 ### Deep Chains
+
 `order.getCustomer().getAddress().getZipCode()` - violates Law of Demeter. Pass the data you need.
 
 ### Orchestration Methods
+
 50+ line methods coordinating calls. Extract units and compose them.
 
 ## Enforcement
@@ -141,30 +150,32 @@ When reviewing code, check:
 ## Testing Strategy
 
 **Small Units:**
+
 ```
 TEST "unit transforms input correctly":
     // Arrange
     input = createTestInput()
     expected = createExpectedOutput()
-    
+
     // Act
     result = transform(input)
-    
+
     // Assert
     ASSERT result EQUALS expected
 ```
 
 **Composed Systems:**
+
 ```
 TEST "pipeline produces correct result":
     // Arrange
     pipeline = compose(unitA, unitB, unitC)
     input = createTestData()
     expected = createExpectedResult()
-    
+
     // Act
     result = pipeline(input)
-    
+
     // Assert
     ASSERT result EQUALS expected
 ```

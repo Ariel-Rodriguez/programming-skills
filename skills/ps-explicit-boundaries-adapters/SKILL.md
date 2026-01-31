@@ -9,11 +9,13 @@ severity: WARN
 ## Principle
 
 Isolate external systems and frameworks behind explicit boundaries using adapters and ports:
+
 - **Core Domain**: Business logic with no external dependencies
 - **Ports**: Interfaces defining what the core needs
 - **Adapters**: Implementations that connect to external systems
 
 Benefits:
+
 - **Testability**: Core logic tests without real infrastructure
 - **Flexibility**: Swap implementations without changing core
 - **Maintainability**: Changes to external systems don't ripple through domain logic
@@ -23,12 +25,14 @@ This is also known as Hexagonal Architecture or Ports & Adapters pattern.
 ## When to Use
 
 **Use this pattern when:**
+
 - Business logic directly imports framework code
 - Core domain depends on database libraries
 - External API clients used throughout the codebase
 - Tests require complex infrastructure setup
 
 **Indicators you need this:**
+
 - Framework imports in business logic files
 - Database client passed to domain functions
 - HTTP client dependencies in core modules
@@ -65,6 +69,7 @@ This is also known as Hexagonal Architecture or Ports & Adapters pattern.
 ### Core Rules
 
 ✅ **Must:**
+
 - Define ports as interfaces in core domain
 - Implement adapters outside core domain
 - Core depends only on port interfaces
@@ -72,6 +77,7 @@ This is also known as Hexagonal Architecture or Ports & Adapters pattern.
 - Pass domain objects through ports, not external types
 
 ❌ **Must not:**
+
 - Import framework code in domain logic
 - Pass database connections to core functions
 - Return ORM models or HTTP response objects from core
@@ -101,13 +107,13 @@ CLASS PostgresUserRepository IMPLEMENTS UserRepository:
     METHOD save(user):
         sql = "INSERT INTO users VALUES (...)"
         EXECUTE sql WITH user.data
-    
+
     METHOD findById(userId):
         sql = "SELECT * FROM users WHERE id = ?"
         RETURN queryDatabase(sql, userId)
 ```
 
-*Domain depends on interface. Adapter implements interface. Core has no database imports.*
+_Domain depends on interface. Adapter implements interface. Core has no database imports._
 
 ### ❌ Bad: Core depends on concrete infrastructure
 
@@ -123,11 +129,12 @@ FUNCTION registerUser(userData, dbClient):
     RETURN user
 ```
 
-*Domain tightly coupled to PostgreSQL. Cannot test without real database. Hard to switch databases.*
+_Domain tightly coupled to PostgreSQL. Cannot test without real database. Hard to switch databases._
 
 ## Testing Strategy
 
 **Core Domain (with ports):**
+
 ```
 TEST "business rule enforced":
     // Arrange
@@ -136,25 +143,26 @@ TEST "business rule enforced":
         findById: mockFunction()
     }
     order = createTestOrder()
-    
+
     // Act
     result = processOrder(order, mockRepo)
-    
+
     // Assert
     ASSERT result.isValid IS true
 ```
 
 **Adapters (integration tests):**
+
 ```
 TEST "persists domain objects":
     // Arrange
     db = setupTestDatabase()
     domainObject = createTestObject()
-    
+
     // Act
     adapter.save(domainObject)
     retrieved = adapter.findById(domainObject.id)
-    
+
     // Assert
     ASSERT retrieved EQUALS domainObject
 ```
@@ -162,38 +170,46 @@ TEST "persists domain objects":
 ## Common Patterns
 
 ### Repository Pattern
+
 Port defines `save()`, `find()`, `delete()` operations. Adapters implement for specific databases. Core never knows if it's PostgreSQL or MongoDB.
 
 ### Gateway Pattern
+
 Port defines external service operations in domain terms. Adapters handle HTTP, authentication, data mapping. Core thinks in domain concepts.
 
 ### Notification Pattern
+
 Port defines `notify(user, message)`. Adapters implement via email, SMS, push notifications. Core doesn't care about delivery mechanism.
 
 ### File Storage Pattern
+
 Port defines `store(file)`, `retrieve(id)`. Adapters implement for local filesystem, S3, Azure Blob. Core logic unchanged when storage moves to cloud.
 
 ## Language-Specific Patterns
 
 ### JavaScript/TypeScript
+
 - Use TypeScript interfaces for ports
 - Dependency injection via constructor parameters
 - Factory functions at composition root
 - Avoid importing concrete implementations in domain files
 
 ### Python
+
 - Use ABC (Abstract Base Class) for ports
 - Type hints with Protocol for structural typing
 - Dependency injection via constructor or function parameters
 - Keep domain in separate package from adapters
 
 ### Java/C#
+
 - Use interfaces for ports
 - Dependency injection frameworks (Spring, .NET Core)
 - Package structure: `domain/` `ports/` `adapters/`
 - Avoid `new` keyword in domain code
 
 ### Go
+
 - Use interfaces for ports (idiomatic Go)
 - Small, focused interfaces
 - Accept interfaces, return structs
@@ -234,7 +250,6 @@ A: Create a thin adapter layer that extends framework classes and delegates to y
 
 **Q: How do I handle transactions across adapters?**  
 A: Define a transaction port in domain. Adapters implement transaction management. Core orchestrates but doesn't manage transactions directly.
-
 
 ## References
 

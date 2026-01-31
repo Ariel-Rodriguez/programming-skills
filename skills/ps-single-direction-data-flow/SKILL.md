@@ -13,6 +13,7 @@ Data flows one way. No backchannels. No hidden feedback loops. No circular depen
 This is about **reasoning locality**: you should be able to trace data flow linearly without jumping through multiple files.
 
 Benefits:
+
 - **Predictability**: Updates follow a single path
 - **Debuggability**: No hidden state mutations
 - **Maintainability**: Clear ownership boundaries
@@ -20,12 +21,14 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Designing state management architecture
 - Reviewing components that share state
 - Debugging "why did this re-render?" issues
 - Setting up reactive systems or event streams
 
 **Indicators you need this:**
+
 - Race conditions from multiple writers
 - Difficulty tracing where data changes
 - Components falling out of sync
@@ -36,6 +39,7 @@ Benefits:
 ### One Source of Truth
 
 Each piece of data has exactly one owner:
+
 - Owner is the sole writer
 - Other code reads from the owner
 - Updates propagate from the owner downward
@@ -43,6 +47,7 @@ Each piece of data has exactly one owner:
 ### Clear Ownership
 
 For every piece of state, know:
+
 - **Who owns this data?** (Which component/module)
 - **Who may change it?** (Only the owner)
 - **How do others get changes?** (Subscriptions, props, parameters)
@@ -50,6 +55,7 @@ For every piece of state, know:
 ### Updates Flow Down, Events Flow Up
 
 Establish clear communication paths:
+
 - **Parent owns state**: Single source of truth
 - **Children receive state**: Via props/parameters
 - **Children send events up**: Actions, callbacks, events
@@ -58,12 +64,14 @@ Establish clear communication paths:
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Multiple components writing to shared state
 - Children mutating parent state directly
 - Circular data dependencies
 - Backchannel updates through side effects
 
 ✅ **Do:**
+
 - Single owner per state value
 - Explicit update paths
 - Events for upward communication
@@ -77,10 +85,10 @@ Establish clear communication paths:
 // PARENT - owns state
 COMPONENT ShoppingCart:
     STATE items = []
-    
+
     FUNCTION addItem(item):
         this.items = [...this.items, item]
-    
+
     FUNCTION render():
         RETURN CartView(
             items: this.items,
@@ -99,7 +107,7 @@ COMPONENT CartView(items, onAddItem):
 // Single source of truth: parent owns items
 ```
 
-*Clear ownership. Data flows one way. Easy to trace updates.*
+_Clear ownership. Data flows one way. Easy to trace updates._
 
 ### ❌ Bad: Bidirectional updates
 
@@ -110,7 +118,7 @@ COMPONENT CartView:
     FUNCTION addItem(item):
         sharedCart.items.push(item)  // Direct mutation
         notifyOtherComponents()  // Manual sync
-    
+
     FUNCTION render():
         DISPLAY sharedCart.items
 
@@ -118,7 +126,7 @@ COMPONENT CartSummary:
     FUNCTION removeItem(itemId):
         sharedCart.items = sharedCart.items.filter(...)
         updateCartView()  // Backchannel update
-    
+
     FUNCTION render():
         DISPLAY sharedCart.items.length
 
@@ -128,7 +136,7 @@ COMPONENT CartSummary:
 // Synchronization nightmare
 ```
 
-*Shared mutable state. Multiple writers. Updates flow in all directions. Debugging nightmare.*
+_Shared mutable state. Multiple writers. Updates flow in all directions. Debugging nightmare._
 
 ## AI Review Checklist
 
@@ -161,7 +169,6 @@ A: Derive from source of truth. Don't store redundant state.
 
 **Q: How do I handle circular dependencies in legacy code?**  
 A: Refactor to extract shared logic to a parent module. Break the cycle.
-
 
 ## Related Patterns
 

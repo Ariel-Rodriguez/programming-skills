@@ -11,6 +11,7 @@ severity: SUGGEST
 Design data structures so that illegal states cannot be represented. Use the type system to enforce invariants at compile time rather than runtime validation.
 
 Benefits:
+
 - **Correctness**: Invalid states literally cannot exist
 - **Maintainability**: Eliminate defensive runtime checks
 - **Clarity**: Type declarations document valid states
@@ -19,12 +20,14 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Multiple fields have interdependent constraints
 - Boolean flags create ambiguous combinations
 - Validation logic is scattered across the codebase
 - Runtime errors indicate impossible states were reached
 
 **Indicators you need this:**
+
 - Multiple booleans that shouldn't all be true/false together
 - Fields that are only valid in certain states
 - Comments explaining "if X then Y must be Z"
@@ -54,17 +57,21 @@ Benefits:
 ### Common Transformations
 
 **Boolean pairs → Enum/Union:**
+
 - `{ loading: bool, error: bool, data: T }` → Union of Loading | Error | Success states
 
 **Nullable with conditions → Discriminated union:**
+
 - `{ status: string, error?: string, result?: T }` → Explicit state variants
 
 **Multiple modes → Sum types:**
+
 - `{ editMode: bool, viewMode: bool }` → Single Mode enum
 
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Representing states with multiple independent booleans
 - Using strings/numbers for states without type constraints
 - Nullable fields that are "required in some cases"
@@ -72,6 +79,7 @@ Benefits:
 - Comments explaining when fields are valid
 
 ✅ **Do:**
+
 - Use discriminated unions for mutually exclusive states
 - Make illegal combinations unrepresentable in types
 - Parse external data into constrained types at boundaries
@@ -106,7 +114,7 @@ FUNCTION render(state: RemoteData<User>):
 // - Failure without error message
 ```
 
-*Type system prevents invalid states. Compiler catches missing cases.*
+_Type system prevents invalid states. Compiler catches missing cases._
 
 ### ❌ Bad: Booleans allow invalid combinations
 
@@ -120,10 +128,10 @@ STRUCTURE RemoteData<T>:
 FUNCTION render(state: RemoteData<User>):
     IF state.isLoading AND state.isError:
         // Can this happen? Should we show loading or error?
-        
+
     IF state.data IS NOT null AND state.isError:
         // Have both data and error? Which to display?
-        
+
     // Must defensively check all combinations
     // Still might miss edge cases
 
@@ -132,25 +140,30 @@ FUNCTION render(state: RemoteData<User>):
 // Invalid states we must handle: 12
 ```
 
-*Most combinations are meaningless. Runtime checks scattered everywhere.*
+_Most combinations are meaningless. Runtime checks scattered everywhere._
 
 ## Type System Strategies
 
 ### Discriminated Unions (TypeScript/Flow)
+
 Use a discriminant field to distinguish variants. The type system narrows based on discriminant checks.
 
 ### Algebraic Data Types (Rust/Haskell/Scala)
+
 Sum types (enums with data) naturally prevent invalid combinations.
 
 ### Phantom Types (Advanced)
+
 Use type parameters that exist only at compile time to track state.
 
 ### Builder Pattern with States
+
 Encode construction order in types so incomplete objects can't exist.
 
 ## Enforcement
 
 **Code review checklist:**
+
 - [ ] Are multiple booleans modeling a single state?
 - [ ] Are there nullable fields that are "sometimes required"?
 - [ ] Do comments explain field interdependencies?
@@ -174,7 +187,6 @@ A: If you have runtime checks for "impossible" states, this prevents real bugs. 
 
 **Q: How does this work in languages without algebraic types?**  
 A: Use classes/interfaces with factory methods. Constructor is private; factories return only valid instances.
-
 
 ## Related Patterns
 

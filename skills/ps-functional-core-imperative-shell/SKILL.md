@@ -9,10 +9,12 @@ severity: BLOCK
 ## Principle
 
 Organize code into two layers:
+
 - **Pure Core**: Deterministic computations with no side effects
 - **Imperative Shell**: Coordinates effects (IO, state, external calls)
 
 Benefits:
+
 - **Testability**: Pure functions need no mocks
 - **Reliability**: Same input → same output
 - **Maintainability**: Business logic isolated from infrastructure
@@ -20,11 +22,13 @@ Benefits:
 ## When to Use
 
 **Use this pattern when:**
+
 - Business logic depends on external data
 - Calculations should be deterministic
 - Testing pure logic without infrastructure setup
 
 **Indicators you need this:**
+
 - Database calls mixed into validation
 - HTTP requests inside calculation functions
 - File IO scattered throughout business logic
@@ -51,12 +55,14 @@ Benefits:
 ### Common Pitfalls
 
 ❌ **Avoid:**
+
 - Side effects in pure functions (logging, DB calls)
 - Pure functions reading global state
 - Business logic in shell layer
 - Passing IO objects to core (connections, file handles)
 
 ✅ **Do:**
+
 - Pass values, not connections
 - Keep shell thin (just orchestration)
 - Make effects explicit in function signatures
@@ -83,14 +89,14 @@ FUNCTION applyDiscountRules(amount, rules):
 FUNCTION processOrder(orderId):
     items = database.getOrderItems(orderId)
     discountRules = database.getActiveDiscounts()
-    
+
     total = calculateOrderTotal(items, discountRules)
-    
+
     database.updateOrder(orderId, total)
     RETURN total
 ```
 
-*Core is pure - testable without database. Shell coordinates IO.*
+_Core is pure - testable without database. Shell coordinates IO._
 
 ### ❌ Bad: Side effects mixed with logic
 
@@ -98,48 +104,50 @@ FUNCTION processOrder(orderId):
 FUNCTION calculateOrderTotal(orderId):
     items = database.getOrderItems(orderId)  // Side effect!
     discountRules = database.getActiveDiscounts()  // Side effect!
-    
+
     log("Calculating total for order " + orderId)  // Side effect!
-    
+
     subtotal = sum(items.map(item => item.price))
     discount = 0
     FOR EACH rule IN discountRules:
         IF rule.applies(subtotal):
             discount = discount + (subtotal * rule.percentage)
-    
+
     total = subtotal - discount
     database.updateOrder(orderId, total)  // Side effect!
     RETURN total
 ```
 
-*Cannot test calculation without database. Cannot reuse logic. Hard to reason about.*
+_Cannot test calculation without database. Cannot reuse logic. Hard to reason about._
 
 ## Testing Strategy
 
 **Pure Core:**
+
 ```
 TEST "calculates correctly":
     // Arrange
     items = createTestItems()
     expectedValue = 150
-    
+
     // Act
     result = calculateTotal(items)
-    
+
     // Assert
     ASSERT result EQUALS expectedValue
 ```
 
 **Imperative Shell:**
+
 ```
 TEST "coordinates effects":
     // Arrange
     mockDB.save = mockFunction()
     orderId = "test-order-123"
-    
+
     // Act
     processOrder(orderId)
-    
+
     // Assert
     ASSERT mockDB.save WAS CALLED
 ```
@@ -149,7 +157,6 @@ TEST "coordinates effects":
 - **Code review**: Verify core functions have no side effects
 - **Architecture tests**: Assert core modules don't import IO libraries
 - **Linter rules**: Warn on console.log / global state in core
-
 
 ## Related Patterns
 
