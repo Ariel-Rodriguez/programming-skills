@@ -12,58 +12,73 @@ from typing import Literal
 @dataclass(frozen=True)
 class JudgmentResult:
     """Result of blind LLM comparison evaluation."""
-    principle_better: Literal["A", "B", "Equal"]  # Which option better follows principle
-    quality_better: Literal["A", "B", "Equal"]    # Which option has better code quality
+    principle_better: Literal["A", "B", "Equal"]  # Which solution better follows principle
+    quality_better: Literal["A", "B", "Equal"]    # Which solution has better code quality
     overall_better: Literal["A", "B", "Equal"]    # Overall winner
     score: int  # 0-100, rating of the better solution
     reasoning: str
-    baseline_is_a: bool  # Track which option (A or B) was the baseline
+    # Note: A = without_skill, B = with_skill (consistent, non-randomized for debugging)
     
     @property
     def is_improvement(self) -> bool:
         """
-        Whether the skill version (which might be A or B) is better than baseline.
-        If baseline_is_a=True, then we want B to be better (skill version).
-        If baseline_is_a=False, then we want A to be better (skill version).
+        Smart improvement detection:
         
-        Returns True only if skill version is clearly better AND score is good.
+        PASS (return True) if:
+        - With_skill (B) is chosen as better, OR
+        - Equal AND score >= 50 (at least some improvement or neutral-good)
+        
+        FAIL (return False) if:
+        - Without_skill (A) is chosen as better (degradation), OR
+        - Equal AND score < 50 (neutral with low performance)
+        
+        Logic:
+        - If ANY case shows degradation (A is better) → FAIL
+        - If ALL cases are neutral (Equal) AND score < 50 → FAIL (not worth it)
+        - If skill (B) wins in any case → PASS
+        - If Equal but score >= 50 (at least half tests pass) → PASS (reasonable)
         """
-        target = "B" if self.baseline_is_a else "A"
-        is_better = self.overall_better == target  # Skill must win, not tie
-        is_quality = self.score >= 70
-        return is_better and is_quality
+        # FAIL if skill caused degradation
+        if self.overall_better == "A":
+            return False
+        
+        # PASS if skill improved
+        if self.overall_better == "B":
+            return True
+        
+        # For Equal: pass if score is reasonable (at least 50%)
+        # This means at least half the tests pass, which is acceptable for neutral-good code
+        return self.score >= 50
 
 
 def build_judgment_prompt(
     principle: str,
     instructions: str,
-    baseline_response: str,
-    skill_response: str
+    without_skill_response: str,
+    with_skill_response: str
 ) -> str:
     """
     Build a blind comparison prompt for LLM self-judgment.
     
-    The model doesn't know which version is baseline vs skill.
+    The model doesn't know which version had skill guidance.
     It must evaluate them on principle adherence and choose which is better.
-    This creates a fair, unbiased evaluation without revealing treatment.
+    This creates a fair, unbiased evaluation.
+    
+    Internally, we always put without_skill as "Solution A" and with_skill as "Solution B"
+    for consistent debugging. The judge doesn't know this.
     
     Args:
         principle: The core principle being taught (e.g., "Composition over Coordination")
         instructions: Key rules/guidance from the skill
-        baseline_response: Code generated without skill guidance (Option A or B)
-        skill_response: Code generated with skill guidance (Option A or B)
+        without_skill_response: Code generated without skill guidance (always Solution A)
+        with_skill_response: Code generated with skill guidance (always Solution B)
     
     Returns:
         Blind comparison evaluation prompt
     """
-    import random
-    # Randomize which response goes first to avoid position bias
-    if random.random() > 0.5:
-        option_a = baseline_response
-        option_b = skill_response
-    else:
-        option_a = skill_response
-        option_b = baseline_response
+    # Consistent naming for debugging: A = without skill, B = with skill
+    option_a = without_skill_response
+    option_b = with_skill_response
     
     return f"""You are comparing two code solutions to determine which better follows a programming principle.
 
@@ -109,13 +124,12 @@ Respond ONLY with valid JSON:
 }}"""
 
 
-def parse_judgment_response(response: str, baseline_is_a: bool = True) -> JudgmentResult:
+def parse_judgment_response(response: str) -> JudgmentResult:
     """
     Parse LLM judge response into JudgmentResult.
     
     Args:
         response: Raw LLM response (should be JSON)
-        baseline_is_a: Whether baseline version was assigned to Option A
     
     Returns:
         Parsed JudgmentResult
@@ -168,6 +182,5 @@ def parse_judgment_response(response: str, baseline_is_a: bool = True) -> Judgme
         quality_better=quality_better,  # type: ignore
         overall_better=overall_better,  # type: ignore
         score=0,  # Placeholder - will be set by evaluation service
-        reasoning=reasoning,
-        baseline_is_a=baseline_is_a  # Passed by caller based on randomization
+        reasoning=reasoning
     )

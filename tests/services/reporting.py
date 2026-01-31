@@ -266,8 +266,7 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
             "quality_better": result.judgment.quality_better,
             "overall_better": result.judgment.overall_better,
             "score": result.judgment.score,
-            "reasoning": result.judgment.reasoning,
-            "baseline_is_a": result.judgment.baseline_is_a
+            "reasoning": result.judgment.reasoning
         }
     
     return serialized

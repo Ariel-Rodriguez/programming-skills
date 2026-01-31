@@ -44,7 +44,7 @@ if [ "$PROVIDER" = "ollama" ]; then
         echo "❌ Error: OLLAMA_API_KEY not set. Cannot use Ollama Cloud."
         exit 1
     fi
-    echo "Using Ollama Cloud (deepseek-v3.1 - good for coding)"
+    echo "Using Ollama Cloud $OLLAMA_MODEL"
     # Explicitly pass environment variables to uv run
     CMD=("env" "OLLAMA_API_KEY=$OLLAMA_API_KEY" "uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "$OLLAMA_MODEL" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 elif [ "$PROVIDER" = "copilot" ]; then

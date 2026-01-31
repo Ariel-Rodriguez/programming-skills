@@ -177,17 +177,17 @@ def main() -> int:
         if eval_result.judgment:
             judge = eval_result.judgment
             print(
-                f"  Baseline: {eval_result.baseline_pass_rate}% | "
+                f"  Without Skill: {eval_result.baseline_pass_rate}% | "
                 f"With Skill: {eval_result.skill_pass_rate}% | "
                 f"Improvement: {eval_result.improvement:+}%"
             )
-            skill_won = judge.overall_better == ("B" if judge.baseline_is_a else "A")
+            skill_won = judge.overall_better == "B"  # B is always with_skill
             verdict = "✓ Better" if skill_won else "✗ No improvement"
             print(f"  🤖 Judge: {verdict} (score: {judge.score}/100)")
             print(f"     {judge.reasoning}")
         else:
             print(
-                f"  Baseline: {eval_result.baseline_pass_rate}% | "
+                f"  Without Skill: {eval_result.baseline_pass_rate}% | "
                 f"With Skill: {eval_result.skill_pass_rate}% | "
                 f"Improvement: {eval_result.improvement:+}%"
             )
@@ -236,11 +236,11 @@ def main() -> int:
         for r in all_results:
             if r.skill_name in failed_skills:
                 print(f"\n  {r.skill_name}:")
-                print(f"    Baseline: {r.baseline_pass_rate}% ({sum(1 for t in r.baseline_results if t.passed)}/{len(r.baseline_results)} passed)")
+                print(f"    Without Skill: {r.baseline_pass_rate}% ({sum(1 for t in r.baseline_results if t.passed)}/{len(r.baseline_results)} passed)")
                 print(f"    With Skill: {r.skill_pass_rate}% ({sum(1 for t in r.skill_results if t.passed)}/{len(r.skill_results)} passed)")
                 
                 if r.judgment:
-                    skill_won = r.judgment.overall_better == ("B" if r.judgment.baseline_is_a else "A")
+                    skill_won = r.judgment.overall_better == "B"  # B is always with_skill
                     verdict = "✓ Better" if skill_won else "✗ No improvement"
                     print(f"    Judge: {verdict} (score: {r.judgment.score}/100)")
                     print(f"    Reasoning: {r.judgment.reasoning}")
