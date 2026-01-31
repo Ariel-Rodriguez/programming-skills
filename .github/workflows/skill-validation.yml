@@ -23,76 +23,75 @@ jobs:
         id: matrix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 << 'EOF_PYTHON'
-import subprocess
-import json
-import sys
-import os
+        run: |
+          python3 << 'MATRIX_SCRIPT'
+          import subprocess
+          import json
+          import sys
+          import os
 
-# Detect modified skills
-result = subprocess.run(
-    ["python3", "ci/detect_changes.py", "${{ github.event.issue.number }}"],
-    capture_output=True, text=True
-)
-modified_skills = result.stdout.strip().split() if result.stdout.strip() else []
-print(f"Modified skills: {modified_skills}")
+          # Detect modified skills
+          result = subprocess.run(
+              ["python3", "ci/detect_changes.py", "${{ github.event.issue.number }}"],
+              capture_output=True, text=True
+          )
+          modified_skills = result.stdout.strip().split() if result.stdout.strip() else []
+          print(f"Modified skills: {modified_skills}")
 
-# Extract filter from comment
-comment = "${{ github.event.comment.body }}"
-filter_provider = "all"
-if "/test copilot" in comment:
-    filter_provider = "copilot"
-elif "/test ollama" in comment:
-    filter_provider = "ollama"
-elif "/test gemini" in comment:
-    filter_provider = "gemini"
+          # Extract filter from comment
+          comment = "${{ github.event.comment.body }}"
+          filter_provider = "all"
+          if "/test copilot" in comment:
+              filter_provider = "copilot"
+          elif "/test ollama" in comment:
+              filter_provider = "ollama"
+          elif "/test gemini" in comment:
+              filter_provider = "gemini"
 
-# Generate base matrix
-result = subprocess.run(
-    ["uv", "run", "--with", "pyyaml", "ci/matrix_generator.py", "--filter-provider", filter_provider],
-    capture_output=True, text=True, stderr=subprocess.DEVNULL
-)
+          # Generate base matrix
+          result = subprocess.run(
+              ["uv", "run", "--with", "pyyaml", "ci/matrix_generator.py", "--filter-provider", filter_provider],
+              capture_output=True, text=True, stderr=subprocess.DEVNULL
+          )
 
-if result.returncode != 0:
-    print(f"Error generating matrix: {result.stderr}", file=sys.stderr)
-    sys.exit(1)
+          if result.returncode != 0:
+              print(f"Error generating matrix: {result.stderr}", file=sys.stderr)
+              sys.exit(1)
 
-# Extract JSON from output (skip non-JSON lines)
-lines = result.stdout.strip().split('\n')
-json_lines = [l for l in lines if l.startswith('{') or l.startswith('[')]
-json_str = '\n'.join(json_lines)
+          # Extract JSON from output
+          lines = result.stdout.strip().split('\n')
+          json_lines = [l for l in lines if l.startswith('{') or l.startswith('[')]
+          json_str = '\n'.join(json_lines)
 
-try:
-    base_matrix = json.loads(json_str)
-except json.JSONDecodeError as e:
-    print(f"Error parsing matrix JSON: {e}", file=sys.stderr)
-    print(f"Output was: {result.stdout}", file=sys.stderr)
-    sys.exit(1)
+          try:
+              base_matrix = json.loads(json_str)
+          except json.JSONDecodeError as e:
+              print(f"Error parsing matrix JSON: {e}", file=sys.stderr)
+              print(f"Output was: {result.stdout}", file=sys.stderr)
+              sys.exit(1)
 
-# Expand matrix if skills were modified
-matrix = {"include": []}
+          # Expand matrix if skills were modified
+          matrix = {"include": []}
 
-if modified_skills and modified_skills[0]:
-    print(f"Expanding matrix: {len(modified_skills)} skills × {len(base_matrix['include'])} models")
-    for item in base_matrix["include"]:
-        for skill in modified_skills:
-            new_item = item.copy()
-            new_item["skill"] = skill
-            new_item["display_name"] = f"{item['display_name']} / {skill}"
-            matrix["include"].append(new_item)
-else:
-    print(f"Testing all skills: {len(base_matrix['include'])} models")
-    matrix = base_matrix
+          if modified_skills and modified_skills[0]:
+              print(f"Expanding matrix: {len(modified_skills)} skills × {len(base_matrix['include'])} models")
+              for item in base_matrix["include"]:
+                  for skill in modified_skills:
+                      new_item = item.copy()
+                      new_item["skill"] = skill
+                      new_item["display_name"] = f"{item['display_name']} / {skill}"
+                      matrix["include"].append(new_item)
+          else:
+              print(f"Testing all skills: {len(base_matrix['include'])} models")
+              matrix = base_matrix
 
-# Output matrix
-matrix_json = json.dumps(matrix)
-print(f"Generated {len(matrix['include'])} jobs")
-print(f"result={matrix_json}")
+          # Output matrix
+          matrix_json = json.dumps(matrix)
+          print(f"Generated {len(matrix['include'])} jobs")
 
-with open(os.environ.get('GITHUB_OUTPUT', ''), 'a') as f:
-    f.write(f"result={matrix_json}\n")
-
-EOF_PYTHON
+          with open(os.environ.get('GITHUB_OUTPUT', ''), 'a') as f:
+              f.write(f"result={matrix_json}\n")
+          MATRIX_SCRIPT
 
   evaluate:
     needs: prepare
