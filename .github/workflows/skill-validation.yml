@@ -27,8 +27,9 @@ jobs:
           COMMENT: ${{ github.event.comment.body }}
         run: |
           python3 ci/orchestrate_evaluations.py "$PR_NUMBER" --matrix-only --filter-provider all > /tmp/matrix.json
-          MATRIX=$(cat /tmp/matrix.json)
-          echo "result=$MATRIX" >> $GITHUB_OUTPUT
+          echo "result<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/matrix.json >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   evaluate:
     needs: prepare
@@ -59,12 +60,23 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          uv run --project tests --frozen tests/evaluator.py \
-            --provider "${{ matrix.provider }}" \
-            --model "${{ matrix.model }}" \
-            --judge --verbose --report --threshold 50 \
-            ${{ matrix.extra_args }} \
-            ${{ matrix.skill && format('--skill {0}', matrix.skill) || '--all' }}
+          CMD="uv run --project tests --frozen tests/evaluator.py"
+          CMD="$CMD --provider ${{ matrix.provider }}"
+          CMD="$CMD --model ${{ matrix.model }}"
+          CMD="$CMD --judge --verbose --report --threshold 50"
+          
+          if [ -n "${{ matrix.extra_args }}" ]; then
+            CMD="$CMD ${{ matrix.extra_args }}"
+          fi
+          
+          if [ -n "${{ matrix.skill }}" ]; then
+            CMD="$CMD --skill ${{ matrix.skill }}"
+          else
+            CMD="$CMD --all"
+          fi
+          
+          echo "Running: $CMD"
+          eval "$CMD"
 
       - name: Upload results
         if: always()
