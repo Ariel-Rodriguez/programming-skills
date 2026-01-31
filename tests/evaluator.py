@@ -64,6 +64,7 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
+    parser.add_argument("--results-dir", help="Custom results directory (default: tests/results)")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
@@ -71,7 +72,13 @@ def main() -> int:
     
     # Configuration (Policy)
     skills_dir = Path("skills")
-    results_dir = Path("tests/results")
+    
+    # Support custom results directory for parallel execution
+    if args.results_dir:
+        results_dir = Path(args.results_dir)
+    else:
+        results_dir = Path("tests/results")
+    
     summary_path = results_dir / "summary.json"
     model_name = args.model or "llama3.2:latest"
     provider = Provider.OLLAMA if args.provider == "ollama" else Provider.COPILOT
