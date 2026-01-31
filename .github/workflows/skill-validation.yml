@@ -19,17 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v5
 
       - name: Detect skills and generate matrix
         id: generate-matrix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 -m pip install -q pyyaml
-          
           # Detect which skills changed
           MODIFIED_SKILLS=$(python3 ci/detect_changes.py ${{ github.event.issue.number }} 2>/dev/null || echo "")
           echo "Modified skills: $MODIFIED_SKILLS"
@@ -46,15 +42,18 @@ jobs:
           fi
           
           # Generate base matrix from config
-          BASE_MATRIX=$(python3 ci/matrix_generator.py --filter-provider "$FILTER")
+          BASE_MATRIX=$(uv run --with pyyaml ci/matrix_generator.py --filter-provider "$FILTER")
           
           # Expand matrix: one job per skill per model
           python3 << 'PYTHON_EOF'
           import json
           import sys
           
-          base_matrix = json.loads("""$BASE_MATRIX""")
-          modified_skills = """$MODIFIED_SKILLS""".strip().split()
+          base_matrix_str = """$BASE_MATRIX"""
+          modified_skills_str = """$MODIFIED_SKILLS"""
+          
+          base_matrix = json.loads(base_matrix_str)
+          modified_skills = modified_skills_str.strip().split() if modified_skills_str.strip() else []
           
           matrix = {"include": []}
           
@@ -109,11 +108,10 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          # Build command
           CMD="uv run --project tests --frozen tests/evaluator.py"
           CMD="$CMD --provider ${{ matrix.provider }}"
           CMD="$CMD --model '${{ matrix.model }}'"
-          CMD="$CMD --judge --verbose --report"
+          CMD="$CMD --judge --verbose --report --threshold 50"
           
           if [ -n "${{ matrix.extra_args }}" ]; then
             CMD="$CMD ${{ matrix.extra_args }}"
@@ -149,27 +147,29 @@ jobs:
         with:
           path: tests/results/
 
-      - name: Consolidate results
+      - name: Generate results comment
         run: |
           python3 << 'PYTHON_EOF'
-          import json
           from pathlib import Path
+          import json
           
+          # Find all summary.json files
           results_base = Path("tests/results")
-          all_passed = True
+          comment = "## 📊 Skill Evaluation Results\n\n"
           
-          # Scan all result dirs
-          for summary_file in results_base.glob("*/summary.json"):
-              try:
-                  with open(summary_file) as f:
-                      summary = json.load(f)
-                      # Check if evaluation passed
-              except:
-                  pass
+          summaries = list(results_base.glob("*/summary.json"))
           
-          # Generate comment
-          comment = "## 🎉 Skill Evaluations Complete\n\n"
-          comment += "Results aggregated from parallel runs.\n"
+          if summaries:
+              for summary_file in sorted(summaries):
+                  try:
+                      summary = json.loads(summary_file.read_text())
+                      rel_path = str(summary_file.parent.relative_to(results_base))
+                      comment += f"### {rel_path}\n"
+                      comment += f"```json\n{json.dumps(summary, indent=2)}\n```\n\n"
+                  except:
+                      pass
+          else:
+              comment += "No results found.\n"
           
           Path("comment.md").write_text(comment)
           PYTHON_EOF
