@@ -126,53 +126,21 @@ class EvaluationResult:
     
     @property
     def baseline_rating(self) -> str:
-        """Categorical rating for baseline, adjusted by judge verdict"""
+        """Categorical rating for baseline, preferring judge's semantic rating"""
+        if self.judgment and self.judgment.option_a_rating:
+            return self.judgment.option_a_rating
+            
         from .logic import get_rating_label
-        baseline_raw = get_rating_label(self.baseline_pass_rate)
-        
-        if not self.judgment or self.judgment.overall_better == "Equal":
-            return baseline_raw
-            
-        # If skill (B) is better, baseline (A) should be at most one level below skill
-        if self.judgment.overall_better == "B":
-            skill_raw = get_rating_label(self.skill_pass_rate)
-            return self._downgrade_if_equal(baseline_raw, skill_raw)
-            
-        return baseline_raw
+        return get_rating_label(self.baseline_pass_rate)
     
     @property
     def skill_rating(self) -> str:
-        """Categorical rating for skill-enhanced, adjusted by judge verdict"""
+        """Categorical rating for skill-enhanced, preferring judge's semantic rating"""
+        if self.judgment and self.judgment.option_b_rating:
+            return self.judgment.option_b_rating
+            
         from .logic import get_rating_label
-        skill_raw = get_rating_label(self.skill_pass_rate)
-        
-        if not self.judgment or self.judgment.overall_better == "Equal":
-            return skill_raw
-            
-        # If baseline (A) is better, skill (B) should be at most one level below baseline
-        if self.judgment.overall_better == "A":
-            baseline_raw = get_rating_label(self.baseline_pass_rate)
-            return self._downgrade_if_equal(skill_raw, baseline_raw)
-            
-        return skill_raw
-    
-    def _downgrade_if_equal(self, raw_label: str, winner_label: str) -> str:
-        """Helper to ensure loser rating is strictly below winner rating if they were equal"""
-        ratings = ["vague", "regular", "good", "outstanding"]
-        
-        try:
-            raw_idx = ratings.index(raw_label)
-            winner_idx = ratings.index(winner_label)
-            
-            # If loser is same as winner or higher (mechanical tie or anomaly), 
-            # force loser to be one level below winner (capped at vague)
-            if raw_idx >= winner_idx:
-                new_idx = max(0, winner_idx - 1)
-                return ratings[new_idx]
-        except ValueError:
-            pass
-            
-        return raw_label
+        return get_rating_label(self.skill_pass_rate)
 
     @property
     def baseline_pass_count(self) -> str:

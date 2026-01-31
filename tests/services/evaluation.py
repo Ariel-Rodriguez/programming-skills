@@ -228,7 +228,9 @@ def _run_judge_evaluation(
             principle_better=judgment_response.principle_better,
             quality_better=judgment_response.quality_better,
             overall_better=judgment_response.overall_better,
-            score=int(deterministic_score),  # Deterministic: % tests passed
+            option_a_rating=judgment_response.option_a_rating,
+            option_b_rating=judgment_response.option_b_rating,
+            score=int(deterministic_score),
             reasoning=judgment_response.reasoning
         )
         

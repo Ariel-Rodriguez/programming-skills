@@ -283,6 +283,8 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
             "principle_better": result.judgment.principle_better,
             "quality_better": result.judgment.quality_better,
             "overall_better": result.judgment.overall_better,
+            "option_a_rating": result.judgment.option_a_rating,
+            "option_b_rating": result.judgment.option_b_rating,
             "score": result.judgment.score,
             "reasoning": result.judgment.reasoning
         }

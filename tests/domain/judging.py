@@ -15,6 +15,8 @@ class JudgmentResult:
     principle_better: Literal["A", "B", "Equal"]  # Which solution better follows principle
     quality_better: Literal["A", "B", "Equal"]    # Which solution has better code quality
     overall_better: Literal["A", "B", "Equal"]    # Overall winner
+    option_a_rating: str  # vague, regular, good, outstanding
+    option_b_rating: str  # vague, regular, good, outstanding
     score: int  # 0-100, rating of the better solution
     reasoning: str
     # Note: A = without_skill, B = with_skill (consistent, non-randomized for debugging)
@@ -101,22 +103,24 @@ SOLUTION B:
 
 ---
 
-Compare the solutions fairly without knowing which came first:
+Compare the solutions fairly and categorize BOTH using this scale:
+- **vague**: Solution does not follow the principle or follows it very poorly/minimally.
+- **regular**: solution follows the principle at a basic level but lacks depth or misses key aspects.
+- **good**: Solution follows the principle well and demonstrates core concepts clearly.
+- **outstanding**: Solution demonstrates mastery of the principle with precise and elegant implementation.
 
-1. **Principle Adherence**: Which solution better demonstrates the principle (A, B, or Equal)?
-
-2. **Code Quality**: Which solution is more maintainable, testable, and flexible (A, B, or Equal)?
-
-3. **Overall Verdict**: Which solution is better overall?
-
-4. **Reasoning**: 2-3 sentences explaining your choice
-
-NOTE: You'll notice there's no score field below. The actual quality score is computed deterministically 
-from how many test scenarios pass (not vibes/subjective rating). You're evaluating semantic quality and 
-principle adherence, not scoring.
+Evaluation Tasks:
+1. **Categorize A**: Assign a rating (vague, regular, good, outstanding) to Solution A.
+2. **Categorize B**: Assign a rating (vague, regular, good, outstanding) to Solution B.
+3. **Principle Adherence**: Which solution better demonstrates the principle (A, B, or Equal)?
+4. **Code Quality**: Which solution is more maintainable, testable, and flexible (A, B, or Equal)?
+5. **Overall Verdict**: Which solution is better overall?
+6. **Reasoning**: 2-3 sentences explaining your choice and the gap between ratings.
 
 Respond ONLY with valid JSON:
 {{
+  "option_a_rating": "vague/regular/good/outstanding",
+  "option_b_rating": "vague/regular/good/outstanding",
   "principle_better": "A/B/Equal",
   "quality_better": "A/B/Equal",
   "overall_better": "A/B/Equal",
@@ -158,6 +162,14 @@ def parse_judgment_response(response: str) -> JudgmentResult:
         raise ValueError(f"Invalid JSON in response: {e}") from e
     
     # Validate and extract fields
+    option_a_rating = data.get("option_a_rating", "vague").lower().strip()
+    if option_a_rating not in ["vague", "regular", "good", "outstanding"]:
+        option_a_rating = "vague"
+        
+    option_b_rating = data.get("option_b_rating", "vague").lower().strip()
+    if option_b_rating not in ["vague", "regular", "good", "outstanding"]:
+        option_b_rating = "vague"
+
     principle_better = data.get("principle_better", "").strip()
     if principle_better not in ["A", "B", "Equal"]:
         raise ValueError(f"Invalid principle_better: {principle_better}")
@@ -181,6 +193,8 @@ def parse_judgment_response(response: str) -> JudgmentResult:
         principle_better=principle_better,  # type: ignore
         quality_better=quality_better,  # type: ignore
         overall_better=overall_better,  # type: ignore
+        option_a_rating=option_a_rating,
+        option_b_rating=option_b_rating,
         score=0,  # Placeholder - will be set by evaluation service
         reasoning=reasoning
     )
