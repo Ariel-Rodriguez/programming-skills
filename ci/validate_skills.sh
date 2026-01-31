@@ -7,7 +7,7 @@ set -e
 PR_NUMBER=$1
 THRESHOLD=${2:-50}
 PROVIDER=${3:-"ollama"}  # Default to ollama
-OLLAMA_MODEL=${4:-"rnj-1"}
+OLLAMA_MODEL=${4:-"rnj-1:8b-cloud"}
 
 if [ -z "$PR_NUMBER" ]; then
     echo "Error: PR number not provided."
