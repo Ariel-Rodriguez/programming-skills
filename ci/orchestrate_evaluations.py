@@ -224,11 +224,13 @@ def main():
     parser.add_argument("--filter-provider", default="all", help="Filter by provider")
     parser.add_argument("--parallel", action="store_true", help="Run in parallel (GitHub Actions mode)")
     parser.add_argument("--threshold", type=int, default=50, help="Pass threshold")
+    parser.add_argument("--matrix-only", action="store_true", help="Only output matrix JSON and exit")
 
     args = parser.parse_args()
 
     # Validate environment
-    validate_environment()
+    if not args.matrix_only:
+        validate_environment()
 
     # Export for child scripts
     os.environ["PR_NUMBER"] = str(args.pr_number)
@@ -241,6 +243,11 @@ def main():
 
     # Generate matrix (expand with per-skill jobs if skills detected)
     items = generate_matrix(args.filter_provider, modified_skills)
+    
+    # If matrix-only mode, output JSON and exit
+    if args.matrix_only:
+        print(json.dumps({"include": items}))
+        sys.exit(0)
 
     # Clean previous results
     results_base = Path("tests/results")

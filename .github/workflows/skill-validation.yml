@@ -19,79 +19,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      - name: Generate evaluation matrix
+      - name: Generate matrix
         id: matrix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT: ${{ github.event.comment.body }}
         run: |
-          python3 << 'MATRIX_SCRIPT'
-          import subprocess
-          import json
-          import sys
-          import os
-
-          # Detect modified skills
-          result = subprocess.run(
-              ["python3", "ci/detect_changes.py", "${{ github.event.issue.number }}"],
-              capture_output=True, text=True
-          )
-          modified_skills = result.stdout.strip().split() if result.stdout.strip() else []
-          print(f"Modified skills: {modified_skills}")
-
-          # Extract filter from comment
-          comment = "${{ github.event.comment.body }}"
-          filter_provider = "all"
-          if "/test copilot" in comment:
-              filter_provider = "copilot"
-          elif "/test ollama" in comment:
-              filter_provider = "ollama"
-          elif "/test gemini" in comment:
-              filter_provider = "gemini"
-
-          # Generate base matrix
-          result = subprocess.run(
-              ["uv", "run", "--with", "pyyaml", "ci/matrix_generator.py", "--filter-provider", filter_provider],
-              capture_output=True, text=True, stderr=subprocess.DEVNULL
-          )
-
-          if result.returncode != 0:
-              print(f"Error generating matrix: {result.stderr}", file=sys.stderr)
-              sys.exit(1)
-
-          # Extract JSON from output
-          lines = result.stdout.strip().split('\n')
-          json_lines = [l for l in lines if l.startswith('{') or l.startswith('[')]
-          json_str = '\n'.join(json_lines)
-
-          try:
-              base_matrix = json.loads(json_str)
-          except json.JSONDecodeError as e:
-              print(f"Error parsing matrix JSON: {e}", file=sys.stderr)
-              print(f"Output was: {result.stdout}", file=sys.stderr)
-              sys.exit(1)
-
-          # Expand matrix if skills were modified
-          matrix = {"include": []}
-
-          if modified_skills and modified_skills[0]:
-              print(f"Expanding matrix: {len(modified_skills)} skills × {len(base_matrix['include'])} models")
-              for item in base_matrix["include"]:
-                  for skill in modified_skills:
-                      new_item = item.copy()
-                      new_item["skill"] = skill
-                      new_item["display_name"] = f"{item['display_name']} / {skill}"
-                      matrix["include"].append(new_item)
-          else:
-              print(f"Testing all skills: {len(base_matrix['include'])} models")
-              matrix = base_matrix
-
-          # Output matrix
-          matrix_json = json.dumps(matrix)
-          print(f"Generated {len(matrix['include'])} jobs")
-
-          with open(os.environ.get('GITHUB_OUTPUT', ''), 'a') as f:
-              f.write(f"result={matrix_json}\n")
-          MATRIX_SCRIPT
+          python3 ci/orchestrate_evaluations.py "$PR_NUMBER" --matrix-only --filter-provider all > /tmp/matrix.json
+          MATRIX=$(cat /tmp/matrix.json)
+          echo "result=$MATRIX" >> $GITHUB_OUTPUT
 
   evaluate:
     needs: prepare
@@ -102,12 +39,16 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-node@v4
+        if: matrix.provider == 'copilot'
         with:
           node-version: '20'
+          
       - name: Install Copilot CLI
         if: matrix.provider == 'copilot'
         run: npm install -g @github/copilot
+        
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -118,16 +59,12 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          CMD="uv run --project tests --frozen tests/evaluator.py"
-          CMD="$CMD --provider ${{ matrix.provider }} --model '${{ matrix.model }}'"
-          CMD="$CMD --judge --verbose --report --threshold 50"
-          [ -n "${{ matrix.extra_args }}" ] && CMD="$CMD ${{ matrix.extra_args }}"
-          if [ -n "${{ matrix.skill }}" ]; then
-            CMD="$CMD --skill ${{ matrix.skill }}"
-          else
-            CMD="$CMD --all"
-          fi
-          eval "$CMD"
+          uv run --project tests --frozen tests/evaluator.py \
+            --provider "${{ matrix.provider }}" \
+            --model "${{ matrix.model }}" \
+            --judge --verbose --report --threshold 50 \
+            ${{ matrix.extra_args }} \
+            ${{ matrix.skill && format('--skill {0}', matrix.skill) || '--all' }}
 
       - name: Upload results
         if: always()
@@ -144,6 +81,7 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/download-artifact@v4
         with:
           path: tests/results/
