@@ -124,6 +124,68 @@ class EvaluationResult:
         """Pure calculation: improvement delta"""
         return self.skill_pass_rate - self.baseline_pass_rate
     
+    @property
+    def baseline_rating(self) -> str:
+        """Categorical rating for baseline, adjusted by judge verdict"""
+        from .logic import get_rating_label
+        baseline_raw = get_rating_label(self.baseline_pass_rate)
+        
+        if not self.judgment or self.judgment.overall_better == "Equal":
+            return baseline_raw
+            
+        # If skill (B) is better, baseline (A) should be at most one level below skill
+        if self.judgment.overall_better == "B":
+            skill_raw = get_rating_label(self.skill_pass_rate)
+            return self._downgrade_if_equal(baseline_raw, skill_raw)
+            
+        return baseline_raw
+    
+    @property
+    def skill_rating(self) -> str:
+        """Categorical rating for skill-enhanced, adjusted by judge verdict"""
+        from .logic import get_rating_label
+        skill_raw = get_rating_label(self.skill_pass_rate)
+        
+        if not self.judgment or self.judgment.overall_better == "Equal":
+            return skill_raw
+            
+        # If baseline (A) is better, skill (B) should be at most one level below baseline
+        if self.judgment.overall_better == "A":
+            baseline_raw = get_rating_label(self.baseline_pass_rate)
+            return self._downgrade_if_equal(skill_raw, baseline_raw)
+            
+        return skill_raw
+    
+    def _downgrade_if_equal(self, raw_label: str, winner_label: str) -> str:
+        """Helper to ensure loser rating is strictly below winner rating if they were equal"""
+        ratings = ["vague", "regular", "good", "outstanding"]
+        
+        try:
+            raw_idx = ratings.index(raw_label)
+            winner_idx = ratings.index(winner_label)
+            
+            # If loser is same as winner or higher (mechanical tie or anomaly), 
+            # force loser to be one level below winner (capped at vague)
+            if raw_idx >= winner_idx:
+                new_idx = max(0, winner_idx - 1)
+                return ratings[new_idx]
+        except ValueError:
+            pass
+            
+        return raw_label
+
+    @property
+    def baseline_pass_count(self) -> str:
+        """String representation of baseline pass count: n/N"""
+        passed = sum(1 for r in self.baseline_results if r.passed)
+        return f"{passed}/{len(self.baseline_results)}"
+    
+    @property
+    def skill_pass_count(self) -> str:
+        """String representation of skill pass count: n/N"""
+        passed = sum(1 for r in self.skill_results if r.passed)
+        return f"{passed}/{len(self.skill_results)}"
+
     @staticmethod
     def _calculate_pass_rate(results: tuple[TestResult, ...]) -> int:
         """Policy-Mechanism Separation: Reusable calculation"""

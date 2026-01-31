@@ -116,3 +116,27 @@ def build_skill_instruction(skill_content: str) -> str:
     
     focused_guidance = extract_skill_guidance(skill_content)
     return f"Apply the following programming skill:\n\n{focused_guidance}\n\n"
+
+def get_rating_label(pass_rate: int) -> str:
+    """
+    Map pass percentage to categorical label.
+    
+    Pure function: Deterministic classification.
+    - outstanding: 100%
+    - good: 75-99%
+    - regular: 51-74%
+    - vague: 0-50%
+    
+    Args:
+        pass_rate: Achievement percentage (0-100)
+        
+    Returns:
+        Categorical string label
+    """
+    if pass_rate >= 100:
+        return "outstanding"
+    if pass_rate >= 75:
+        return "good"
+    if pass_rate >= 51:
+        return "regular"
+    return "vague"

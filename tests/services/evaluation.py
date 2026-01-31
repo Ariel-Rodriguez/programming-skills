@@ -233,9 +233,14 @@ def _run_judge_evaluation(
         )
         
         if verbose:
-            skill_won = judgment.overall_better == "B"  # B is always with_skill
-            status = "✓ Skill improved" if skill_won else "✗ No improvement"
-            print(f"      [JUDGE] {status} (score: {judgment.score}/100 = {with_skill_passed}/{total_tests} tests)")
+            overall_better = judgment.overall_better
+            if overall_better == 'B':
+                imp_label = "yes"
+            elif overall_better == 'A':
+                imp_label = "no"
+            else:
+                imp_label = "neutral"
+            print(f"      [JUDGE] improvement: {imp_label} (score: {judgment.score}/100 = {with_skill_passed}/{total_tests} tests)")
         return judgment
     except ValueError as e:
         if verbose:

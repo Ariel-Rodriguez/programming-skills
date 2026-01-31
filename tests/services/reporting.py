@@ -76,15 +76,19 @@ def generate_console_report(summary_path: Path, fs: FileSystemPort) -> str:
         has_judgments = any(r.get('judgment') for r in results)
         
         if has_judgments:
-            lines.append("| Skill | Severity | Model | Baseline | With Skill | Improvement | Judge Score | Status |")
-            lines.append("|-------|----------|-------|----------|------------|-------------|-------------|--------|")
+            lines.append("| Skill | Severity | Model | Baseline | With Skill | Improvement | Cases Pass (n/n) | Judge Score | Status |")
+            lines.append("|-------|----------|-------|----------|------------|-------------|------------------|-------------|--------|")
         else:
-            lines.append("| Skill | Severity | Model | Baseline | With Skill | Improvement | Status |")
-            lines.append("|-------|----------|-------|----------|------------|-------------|--------|")
+            lines.append("| Skill | Severity | Model | Baseline | With Skill | Improvement | Cases Pass (n/n) | Status |")
+            lines.append("|-------|----------|-------|----------|------------|-------------|------------------|--------|")
         
         for r in results:
-            baseline = r.get('baseline_rate', 0)
-            skill = r.get('skill_rate', 0)
+            baseline = r.get('baseline_rating', 'vague')
+            skill = r.get('skill_rating', 'vague')
+            baseline_count = r.get('baseline_pass_count', "0/0")
+            skill_count = r.get('skill_pass_count', "0/0")
+            pass_counts = f"{baseline_count} -> {skill_count}"
+            
             improvement = r.get('improvement', 0)
             severity = r.get('severity', 'SUGGEST')
             judgment = r.get('judgment')
@@ -95,26 +99,28 @@ def generate_console_report(summary_path: Path, fs: FileSystemPort) -> str:
                 overall_better = judgment.get('overall_better', 'Equal')
                 if overall_better == 'B':  # B is skill-enhanced
                     status = "✅"
+                    imp_str = "yes"
                 elif overall_better == 'A':  # A is baseline (worse)
                     status = "❌"
+                    imp_str = "no"
                 else:
                     status = "~"
+                    imp_str = "neutral"
                 judge_str = f"{score}/100 ({overall_better})"
             else:
                 status = "+" if improvement > 0 else ("-" if improvement < 0 else "~")
                 judge_str = "N/A"
-            
-            imp_str = f"{improvement:+}%"
+                imp_str = f"{improvement:+}%"
             
             if has_judgments:
                 lines.append(
                     f"| {r['skill']} | {severity} | {r['model']} | "
-                    f"{baseline}% | {skill}% | {imp_str} | {judge_str} | {status} |"
+                    f"{baseline} | {skill} | {imp_str} | {pass_counts} | {judge_str} | {status} |"
                 )
             else:
                 lines.append(
                     f"| {r['skill']} | {severity} | {r['model']} | "
-                    f"{baseline}% | {skill}% | {imp_str} | {status} |"
+                    f"{baseline} | {skill} | {imp_str} | {pass_counts} | {status} |"
                 )
         
         return "\n".join(lines)
@@ -152,15 +158,19 @@ def generate_github_comment(summary_path: Path, fs: FileSystemPort) -> Result:
         has_judgments = any(r.get('judgment') for r in results)
         
         if has_judgments:
-            lines.append("| Skill | Status | Baseline | With Skill | Improvement | Judge Verdict |")
-            lines.append("|-------|--------|----------|------------|-------------|---------------|")
+            lines.append("| Skill | Status | Baseline | With Skill | Improvement | Cases Pass (n/n) | Judge Verdict |")
+            lines.append("|-------|--------|----------|------------|-------------|------------------|---------------|")
         else:
-            lines.append("| Skill | Status | Baseline | With Skill | Improvement |")
-            lines.append("|-------|--------|----------|------------|-------------|")
+            lines.append("| Skill | Status | Baseline | With Skill | Improvement | Cases Pass (n/n) |")
+            lines.append("|-------|--------|----------|------------|-------------|------------------|")
         
         for r in results:
-            baseline = r.get('baseline_rate', 0)
-            skill = r.get('skill_rate', 0)
+            baseline = r.get('baseline_rating', 'vague')
+            skill = r.get('skill_rating', 'vague')
+            baseline_count = r.get('baseline_pass_count', "0/0")
+            skill_count = r.get('skill_pass_count', "0/0")
+            pass_counts = f"{baseline_count} -> {skill_count}"
+            
             improvement = r.get('improvement', 0)
             judgment = r.get('judgment')
             
@@ -170,19 +180,23 @@ def generate_github_comment(summary_path: Path, fs: FileSystemPort) -> Result:
                 score = judgment.get('score', 0)
                 if overall_better == 'B':  # B is skill version
                     status = "✅"
+                    improvement_label = "yes"
                 elif overall_better == 'A':  # A is baseline
                     status = "❌"
+                    improvement_label = "no"
                 else:
                     status = "~"
+                    improvement_label = "neutral"
                 judge_verdict = f"{overall_better} ({score}/100)"
             else:
                 status = "+" if improvement > 0 else ("-" if improvement < 0 else "~")
+                improvement_label = f"{improvement:+}%"
                 judge_verdict = "N/A"
             
             if has_judgments:
-                lines.append(f"| {r['skill']} | {status} | {baseline}% | {skill}% | {improvement:+}% | {judge_verdict} |")
+                lines.append(f"| {r['skill']} | {status} | {baseline} | {skill} | {improvement_label} | {pass_counts} | {judge_verdict} |")
             else:
-                lines.append(f"| {r['skill']} | {status} | {baseline}% | {skill}% | {improvement:+}% |")
+                lines.append(f"| {r['skill']} | {status} | {baseline} | {skill} | {improvement_label} | {pass_counts} |")
         
         lines.append("\n---")
         
@@ -240,6 +254,10 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
         "model": result.model,
         "baseline_rate": result.baseline_pass_rate,
         "skill_rate": result.skill_pass_rate,
+        "baseline_rating": result.baseline_rating,
+        "skill_rating": result.skill_rating,
+        "baseline_pass_count": result.baseline_pass_count,
+        "skill_pass_count": result.skill_pass_count,
         "improvement": result.improvement,
         "results": [
             {

@@ -174,21 +174,35 @@ def main() -> int:
         all_results.append(eval_result)
         
         # Display results
+        # Use semantic ratings and qualitative labels
+        baseline_rating = eval_result.baseline_rating
+        skill_rating = eval_result.skill_rating
+        baseline_count = eval_result.baseline_pass_count
+        skill_count = eval_result.skill_pass_count
+        
         if eval_result.judgment:
             judge = eval_result.judgment
+            overall_better = judge.overall_better
+            if overall_better == 'B':
+                imp_label = "yes"
+            elif overall_better == 'A':
+                imp_label = "no"
+            else:
+                imp_label = "neutral"
+                
             print(
-                f"  Without Skill: {eval_result.baseline_pass_rate}% | "
-                f"With Skill: {eval_result.skill_pass_rate}% | "
-                f"Improvement: {eval_result.improvement:+}%"
+                f"  Without Skill: {baseline_rating} ({baseline_count}) | "
+                f"With Skill: {skill_rating} ({skill_count}) | "
+                f"Improvement: {imp_label}"
             )
-            skill_won = judge.overall_better == "B"  # B is always with_skill
-            verdict = "✓ Better" if skill_won else "✗ No improvement"
+            skill_won = overall_better == "B"
+            verdict = "✓ Better" if skill_won else ("Equal" if overall_better == "Equal" else "✗ No improvement")
             print(f"  🤖 Judge: {verdict} (score: {judge.score}/100)")
             print(f"     {judge.reasoning}")
         else:
             print(
-                f"  Without Skill: {eval_result.baseline_pass_rate}% | "
-                f"With Skill: {eval_result.skill_pass_rate}% | "
+                f"  Without Skill: {baseline_rating} ({baseline_count}) | "
+                f"With Skill: {skill_rating} ({skill_count}) | "
                 f"Improvement: {eval_result.improvement:+}%"
             )
     
