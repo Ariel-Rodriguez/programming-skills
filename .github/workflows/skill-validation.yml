@@ -9,77 +9,91 @@ permissions:
   contents: read
 
 jobs:
-  # Prepare matrix for per-skill parallelization
   prepare:
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/test')
     outputs:
-      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+      matrix: ${{ steps.matrix.outputs.result }}
     
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v5
 
-      - name: Detect skills and generate matrix
-        id: generate-matrix
+      - name: Generate evaluation matrix
+        id: matrix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Detect which skills changed
-          MODIFIED_SKILLS=$(python3 ci/detect_changes.py ${{ github.event.issue.number }} 2>/dev/null || echo "")
-          echo "Modified skills: $MODIFIED_SKILLS"
-          
-          # Extract filter from comment
-          COMMENT="${{ github.event.comment.body }}"
-          FILTER="all"
-          if echo "$COMMENT" | grep -q "/test copilot"; then
-            FILTER="copilot"
-          elif echo "$COMMENT" | grep -q "/test ollama"; then
-            FILTER="ollama"
-          elif echo "$COMMENT" | grep -q "/test gemini"; then
-            FILTER="gemini"
-          fi
-          
-          # Generate base matrix from config
-          BASE_MATRIX=$(uv run --with pyyaml ci/matrix_generator.py --filter-provider "$FILTER")
-          
-          # Expand matrix: one job per skill per model
-          python3 << 'PYTHON_EOF'
-          import json
-          import sys
-          
-          base_matrix_str = """$BASE_MATRIX"""
-          modified_skills_str = """$MODIFIED_SKILLS"""
-          
-          base_matrix = json.loads(base_matrix_str)
-          modified_skills = modified_skills_str.strip().split() if modified_skills_str.strip() else []
-          
-          matrix = {"include": []}
-          
-          if modified_skills and modified_skills[0]:
-              # Per-skill parallelization
-              for item in base_matrix["include"]:
-                  for skill in modified_skills:
-                      new_item = item.copy()
-                      new_item["skill"] = skill
-                      new_item["display_name"] = f"{item['display_name']} / {skill}"
-                      matrix["include"].append(new_item)
-          else:
-              # Test all skills
-              matrix = base_matrix
-          
-          print(json.dumps(matrix, indent=2))
-          with open('/tmp/matrix.json', 'w') as f:
-              json.dump(matrix, f)
-          PYTHON_EOF
-          
-          MATRIX=$(cat /tmp/matrix.json)
-          echo "matrix<<EOF" >> $GITHUB_OUTPUT
-          echo "$MATRIX" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        run: python3 << 'EOF_PYTHON'
+import subprocess
+import json
+import sys
+import os
 
-  # Run evaluations - one per skill per model (parallel)
+# Detect modified skills
+result = subprocess.run(
+    ["python3", "ci/detect_changes.py", "${{ github.event.issue.number }}"],
+    capture_output=True, text=True
+)
+modified_skills = result.stdout.strip().split() if result.stdout.strip() else []
+print(f"Modified skills: {modified_skills}")
+
+# Extract filter from comment
+comment = "${{ github.event.comment.body }}"
+filter_provider = "all"
+if "/test copilot" in comment:
+    filter_provider = "copilot"
+elif "/test ollama" in comment:
+    filter_provider = "ollama"
+elif "/test gemini" in comment:
+    filter_provider = "gemini"
+
+# Generate base matrix
+result = subprocess.run(
+    ["uv", "run", "--with", "pyyaml", "ci/matrix_generator.py", "--filter-provider", filter_provider],
+    capture_output=True, text=True, stderr=subprocess.DEVNULL
+)
+
+if result.returncode != 0:
+    print(f"Error generating matrix: {result.stderr}", file=sys.stderr)
+    sys.exit(1)
+
+# Extract JSON from output (skip non-JSON lines)
+lines = result.stdout.strip().split('\n')
+json_lines = [l for l in lines if l.startswith('{') or l.startswith('[')]
+json_str = '\n'.join(json_lines)
+
+try:
+    base_matrix = json.loads(json_str)
+except json.JSONDecodeError as e:
+    print(f"Error parsing matrix JSON: {e}", file=sys.stderr)
+    print(f"Output was: {result.stdout}", file=sys.stderr)
+    sys.exit(1)
+
+# Expand matrix if skills were modified
+matrix = {"include": []}
+
+if modified_skills and modified_skills[0]:
+    print(f"Expanding matrix: {len(modified_skills)} skills × {len(base_matrix['include'])} models")
+    for item in base_matrix["include"]:
+        for skill in modified_skills:
+            new_item = item.copy()
+            new_item["skill"] = skill
+            new_item["display_name"] = f"{item['display_name']} / {skill}"
+            matrix["include"].append(new_item)
+else:
+    print(f"Testing all skills: {len(base_matrix['include'])} models")
+    matrix = base_matrix
+
+# Output matrix
+matrix_json = json.dumps(matrix)
+print(f"Generated {len(matrix['include'])} jobs")
+print(f"result={matrix_json}")
+
+with open(os.environ.get('GITHUB_OUTPUT', ''), 'a') as f:
+    f.write(f"result={matrix_json}\n")
+
+EOF_PYTHON
+
   evaluate:
     needs: prepare
     runs-on: ubuntu-latest
@@ -89,41 +103,31 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install Copilot CLI
         if: matrix.provider == 'copilot'
         run: npm install -g @github/copilot
-
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Run evaluation for ${{ matrix.display_name }}
+      - name: Evaluate ${{ matrix.display_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           CMD="uv run --project tests --frozen tests/evaluator.py"
-          CMD="$CMD --provider ${{ matrix.provider }}"
-          CMD="$CMD --model '${{ matrix.model }}'"
+          CMD="$CMD --provider ${{ matrix.provider }} --model '${{ matrix.model }}'"
           CMD="$CMD --judge --verbose --report --threshold 50"
-          
-          if [ -n "${{ matrix.extra_args }}" ]; then
-            CMD="$CMD ${{ matrix.extra_args }}"
-          fi
-          
+          [ -n "${{ matrix.extra_args }}" ] && CMD="$CMD ${{ matrix.extra_args }}"
           if [ -n "${{ matrix.skill }}" ]; then
             CMD="$CMD --skill ${{ matrix.skill }}"
           else
             CMD="$CMD --all"
           fi
-          
-          echo "Running: $CMD"
           eval "$CMD"
 
       - name: Upload results
@@ -134,7 +138,6 @@ jobs:
           path: tests/results/
           retention-days: 1
 
-  # Consolidate and post results
   consolidate:
     needs: evaluate
     runs-on: ubuntu-latest
@@ -142,39 +145,14 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           path: tests/results/
 
-      - name: Generate results comment
-        run: |
-          python3 << 'PYTHON_EOF'
-          from pathlib import Path
-          import json
-          
-          # Find all summary.json files
-          results_base = Path("tests/results")
-          comment = "## 📊 Skill Evaluation Results\n\n"
-          
-          summaries = list(results_base.glob("*/summary.json"))
-          
-          if summaries:
-              for summary_file in sorted(summaries):
-                  try:
-                      summary = json.loads(summary_file.read_text())
-                      rel_path = str(summary_file.parent.relative_to(results_base))
-                      comment += f"### {rel_path}\n"
-                      comment += f"```json\n{json.dumps(summary, indent=2)}\n```\n\n"
-                  except:
-                      pass
-          else:
-              comment += "No results found.\n"
-          
-          Path("comment.md").write_text(comment)
-          PYTHON_EOF
+      - name: Consolidate results
+        run: python3 ci/consolidate_results.py || echo "# Results pending" > comment.md
 
-      - name: Post results
+      - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2
         if: hashFiles('comment.md') != ''
         with:
