@@ -72,15 +72,23 @@ def main():
             summary = result['summary']
             artifact = result['artifact']
             
-            # Extract key data
-            results_list = summary.get('results', [])
-            skill = summary.get('skill', 'N/A')
-            model = summary.get('model', 'N/A')
-            baseline_rating = summary.get('baseline_rating', 'N/A')
-            skill_rating = summary.get('skill_rating', 'N/A')
-            baseline_pass = summary.get('baseline_pass_count', 'N/A')
-            skill_pass = summary.get('skill_pass_count', 'N/A')
-            overall_better = summary.get('judgment', {}).get('overall_better', 'N/A')
+            # Debug: Log top-level keys
+            print(f"\n📋 Processing: {artifact}")
+            print(f"   Top-level keys: {list(summary.keys())}")
+            
+            # Extract key data from nested results[0]
+            eval_result = summary.get('results', [{}])[0] if summary.get('results') else {}
+            print(f"   Nested result keys: {list(eval_result.keys())}")
+            
+            skill = eval_result.get('skill', 'N/A')
+            model = eval_result.get('model', 'N/A')
+            baseline_rating = eval_result.get('baseline_rating', 'N/A')
+            skill_rating = eval_result.get('skill_rating', 'N/A')
+            baseline_pass = eval_result.get('baseline_pass_count', 'N/A')
+            skill_pass = eval_result.get('skill_pass_count', 'N/A')
+            overall_better = eval_result.get('judgment', {}).get('overall_better', 'N/A')
+            
+            print(f"   Extracted: model={model}, baseline={baseline_rating}, skill={skill_rating}, winner={overall_better}")
             
             # Determine winner
             if overall_better == 'A':
