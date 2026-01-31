@@ -11,10 +11,10 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/test')
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/test') && github.actor == 'Ariel-Rodriguez'
     outputs:
       matrix: ${{ steps.matrix.outputs.result }}
-    
+
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -37,11 +37,11 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           python3 ci/generate_matrix.py "$PR_NUMBER" ${{ steps.command.outputs.skills }} > /tmp/matrix.json
-          
+
           echo "result<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/matrix.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
           python3 -c "import json; m=json.load(open('/tmp/matrix.json')); print(f'Generated {len(m[\"include\"])} jobs')"
 
   evaluate:
@@ -51,19 +51,19 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         if: matrix.provider == 'copilot'
         with:
-          node-version: '20'
-          
+          node-version: "20"
+
       - name: Install Copilot CLI
         if: matrix.provider == 'copilot'
         run: npm install -g @github/copilot
-        
+
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -85,17 +85,17 @@ jobs:
           CMD="$CMD --provider ${{ matrix.provider }}"
           CMD="$CMD --model ${{ matrix.model }}"
           CMD="$CMD --judge --verbose --report --threshold 50"
-          
+
           if [ -n "${{ matrix.extra_args }}" ]; then
             CMD="$CMD ${{ matrix.extra_args }}"
           fi
-          
+
           if [ -n "${{ matrix.skill }}" ]; then
             CMD="$CMD --skill ${{ matrix.skill }}"
           else
             CMD="$CMD --all"
           fi
-          
+
           echo "Running: $CMD"
           eval "$CMD"
 
@@ -111,10 +111,10 @@ jobs:
     needs: evaluate
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/download-artifact@v4
         with:
           path: tests/results/
