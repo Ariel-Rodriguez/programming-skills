@@ -7,6 +7,7 @@ set -e
 PR_NUMBER=$1
 THRESHOLD=${2:-50}
 PROVIDER=${3:-"ollama"}  # Default to ollama
+OLLAMA_MODEL=${4:-"rnj-1"}
 
 if [ -z "$PR_NUMBER" ]; then
     echo "Error: PR number not provided."
@@ -45,16 +46,16 @@ if [ "$PROVIDER" = "ollama" ]; then
     fi
     echo "Using Ollama Cloud (deepseek-v3.1 - good for coding)"
     # Explicitly pass environment variables to uv run
-    CMD=("env" "OLLAMA_API_KEY=$OLLAMA_API_KEY" "uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+    CMD=("env" "OLLAMA_API_KEY=$OLLAMA_API_KEY" "uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "$OLLAMA_MODEL" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 elif [ "$PROVIDER" = "copilot" ]; then
     echo "Using Copilot CLI (claude-sonnet-4.5)"
     CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "copilot" "--model" "claude-sonnet-4.5" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 elif [ "$PROVIDER" = "all" ]; then
     echo "Testing with all providers (not yet implemented - using ollama)"
-    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "$OLLAMA_MODEL" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 else
     echo "Unknown provider: $PROVIDER (using ollama)"
-    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "deepseek-v3.1" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
+    CMD=("uv" "run" "--project" "tests" "tests/evaluator.py" "--provider" "ollama" "--model" "$OLLAMA_MODEL" "--ollama-cloud" "--threshold" "$THRESHOLD" "--report" "--github-comment" "--judge" "--verbose")
 fi
 
 if [ -n "$MODIFIED_SKILLS" ]; then
