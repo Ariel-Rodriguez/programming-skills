@@ -61,7 +61,9 @@ jobs:
         id: generate-matrix
         run: |
           MATRIX=$(python3 ci/matrix_generator.py --filter-provider "${{ steps.parse.outputs.filter }}")
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$MATRIX" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           echo "Generated matrix:"
           echo "$MATRIX" | jq .
 
