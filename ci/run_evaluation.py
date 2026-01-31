@@ -45,6 +45,7 @@ def main():
         "run",
         "--project",
         "tests",
+        "--frozen",
         "tests/evaluator.py",
         "--provider",
         provider,
@@ -66,10 +67,16 @@ def main():
     # Add skill arguments
     cmd.extend(skill_args)
 
-    print(f"Executing: {' '.join(cmd)}")
+    print(f"[{provider}/{model}] Executing evaluation...")
+    print(f"[{provider}/{model}] Output will be in: {results_dir}")
 
-    # Execute
+    # Execute with live output
     exit_code = subprocess.run(cmd).returncode
+    
+    if exit_code == 0:
+        print(f"[{provider}/{model}] ✅ Evaluation completed successfully")
+    else:
+        print(f"[{provider}/{model}] ❌ Evaluation failed with exit code {exit_code}")
 
     # Save exit code for consolidation
     (results_dir / "exit_code").write_text(str(exit_code))

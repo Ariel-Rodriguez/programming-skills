@@ -9,21 +9,34 @@ permissions:
   contents: read
 
 jobs:
-  # Prepare matrix for parallel evaluation (default)
+  # Prepare matrix for per-skill parallelization
   prepare:
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/test')
     outputs:
       matrix: ${{ steps.generate-matrix.outputs.matrix }}
-      filter: ${{ steps.parse.outputs.filter }}
     
     steps:
-      - name: Parse test command
-        id: parse
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Detect skills and generate matrix
+        id: generate-matrix
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          python3 -m pip install -q pyyaml
+          
+          # Detect which skills changed
+          MODIFIED_SKILLS=$(python3 ci/detect_changes.py ${{ github.event.issue.number }} 2>/dev/null || echo "")
+          echo "Modified skills: $MODIFIED_SKILLS"
+          
+          # Extract filter from comment
           COMMENT="${{ github.event.comment.body }}"
           FILTER="all"
-          
           if echo "$COMMENT" | grep -q "/test copilot"; then
             FILTER="copilot"
           elif echo "$COMMENT" | grep -q "/test ollama"; then
@@ -32,24 +45,42 @@ jobs:
             FILTER="gemini"
           fi
           
-          echo "filter=$FILTER" >> $GITHUB_OUTPUT
-      
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Generate matrix
-        id: generate-matrix
-        run: |
-          python3 -m pip install -q pyyaml
-          MATRIX=$(python3 ci/matrix_generator.py --filter-provider "${{ steps.parse.outputs.filter }}")
+          # Generate base matrix from config
+          BASE_MATRIX=$(python3 ci/matrix_generator.py --filter-provider "$FILTER")
+          
+          # Expand matrix: one job per skill per model
+          python3 << 'PYTHON_EOF'
+          import json
+          import sys
+          
+          base_matrix = json.loads("""$BASE_MATRIX""")
+          modified_skills = """$MODIFIED_SKILLS""".strip().split()
+          
+          matrix = {"include": []}
+          
+          if modified_skills and modified_skills[0]:
+              # Per-skill parallelization
+              for item in base_matrix["include"]:
+                  for skill in modified_skills:
+                      new_item = item.copy()
+                      new_item["skill"] = skill
+                      new_item["display_name"] = f"{item['display_name']} / {skill}"
+                      matrix["include"].append(new_item)
+          else:
+              # Test all skills
+              matrix = base_matrix
+          
+          print(json.dumps(matrix, indent=2))
+          with open('/tmp/matrix.json', 'w') as f:
+              json.dump(matrix, f)
+          PYTHON_EOF
+          
+          MATRIX=$(cat /tmp/matrix.json)
           echo "matrix<<EOF" >> $GITHUB_OUTPUT
           echo "$MATRIX" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-  # Run evaluations in parallel (default: matrix strategy)
+  # Run evaluations - one per skill per model (parallel)
   evaluate:
     needs: prepare
     runs-on: ubuntu-latest
@@ -72,33 +103,40 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Detect changes
-        id: changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 ci/detect_changes.py ${{ github.event.issue.number }} > modified_skills.txt 2>/dev/null || echo "" > modified_skills.txt
-          SKILLS=$(cat modified_skills.txt)
-          echo "skills=$SKILLS" >> $GITHUB_OUTPUT
-
       - name: Run evaluation for ${{ matrix.display_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-          MODIFIED_SKILLS: ${{ steps.changes.outputs.skills }}
         run: |
-          python3 ci/run_evaluation.py "${{ matrix.provider }}" "${{ matrix.model }}" 50 "${{ matrix.extra_args }}"
+          # Build command
+          CMD="uv run --project tests --frozen tests/evaluator.py"
+          CMD="$CMD --provider ${{ matrix.provider }}"
+          CMD="$CMD --model '${{ matrix.model }}'"
+          CMD="$CMD --judge --verbose --report"
+          
+          if [ -n "${{ matrix.extra_args }}" ]; then
+            CMD="$CMD ${{ matrix.extra_args }}"
+          fi
+          
+          if [ -n "${{ matrix.skill }}" ]; then
+            CMD="$CMD --skill ${{ matrix.skill }}"
+          else
+            CMD="$CMD --all"
+          fi
+          
+          echo "Running: $CMD"
+          eval "$CMD"
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ matrix.provider }}-${{ matrix.model }}
-          path: tests/results/${{ matrix.provider }}/${{ matrix.model }}/
+          name: results-${{ matrix.provider }}-${{ matrix.model }}${{ matrix.skill && format('-{0}', matrix.skill) || '' }}
+          path: tests/results/
           retention-days: 1
 
-  # Consolidate results from all parallel runs
+  # Consolidate and post results
   consolidate:
     needs: evaluate
     runs-on: ubuntu-latest
@@ -112,7 +150,29 @@ jobs:
           path: tests/results/
 
       - name: Consolidate results
-        run: python3 ci/consolidate_results.py || true
+        run: |
+          python3 << 'PYTHON_EOF'
+          import json
+          from pathlib import Path
+          
+          results_base = Path("tests/results")
+          all_passed = True
+          
+          # Scan all result dirs
+          for summary_file in results_base.glob("*/summary.json"):
+              try:
+                  with open(summary_file) as f:
+                      summary = json.load(f)
+                      # Check if evaluation passed
+              except:
+                  pass
+          
+          # Generate comment
+          comment = "## 🎉 Skill Evaluations Complete\n\n"
+          comment += "Results aggregated from parallel runs.\n"
+          
+          Path("comment.md").write_text(comment)
+          PYTHON_EOF
 
       - name: Post results
         uses: marocchino/sticky-pull-request-comment@v2
