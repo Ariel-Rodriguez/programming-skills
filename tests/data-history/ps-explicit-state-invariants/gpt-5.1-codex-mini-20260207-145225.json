@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T14:52:25",
+  "skill": "ps-explicit-state-invariants",
+  "severity": "BLOCK",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_boolean_explosion",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Discriminated Union**\n\n- Replace the general `isLoading/isError` flags with a `status` field (e.g....",
+        "response_full": "**Discriminated Union**\n\n- Replace the general `isLoading/isError` flags with a `status` field (e.g. `'idle' | 'loading' | 'success' | 'error'`) so each shape only allows the fields that make sense.\n- Example TypeScript:\n\n```ts\ntype SuccessState = { status: 'success'; data: string; error: null };\ntype ErrorState = { status: 'error'; data: null; error: string };\ntype LoadingState = { status: 'loading'; data: null; error: null };\ntype IdleState = { status: 'idle'; data: null; error: null };\n\ntype State = SuccessState | ErrorState | LoadingState | IdleState;\n\nconst state: State = {\n  status: 'error',\n  data: null,\n  error: 'Network timeout'\n};\n```\n\n- Now TypeScript will reject invalid combinations like `{ status: 'loading'; error: 'foo' }` because the `status` discriminant determines the allowed shape."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**State Union**\n\nModel state as a tagged union so only one branch can exist at a time and every bran...",
+        "response_full": "**State Union**\n\nModel state as a tagged union so only one branch can exist at a time and every branch carries exactly the fields it needs:\n\n```ts\ntype RequestState =\n  | { status: 'idle' }                            // invariant: no data/error\n  | { status: 'loading' }                         // invariant: still no data/error\n  | { status: 'success'; data: SomeData }          // invariant: data present, error absent\n  | { status: 'error'; error: string };            // invariant: error present, data absent\n```\n\nEach transition becomes a named helper (e.g., `startLoading`, `succeedWith(data)`, `failWith(message)`), so you always assign a whole valid branch at once and never toggle overlapping booleans.\n\nNext steps: pick or define `SomeData`, implement the transition helpers you need, and use exhaustive `switch`/`match` logic when reading `state` so the compiler enforces every case."
+      }
+    },
+    {
+      "name": "state_invariant_definition",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Used **ps-explicit-state-invariants** because you\u2019re asking for how to design state with an explicit...",
+        "response_full": "Used **ps-explicit-state-invariants** because you\u2019re asking for how to design state with an explicit invariant.\n\n- Primary invariant: the wizard must always be in exactly one discrete step state, and that step governs which form data is valid and whether a submission result may exist.  \n  - `currentStep` \u2260 `null` and identifies one of the predefined steps (e.g., Step 1, Step 2, \u2026, Submission).  \n  - `formData` contains valid inputs only for steps that are \u2264 `currentStep`; data for future steps must be absent or invalid, because allowing it would create indistinct states.  \n  - `submissionResult` is present if and only if `currentStep` is the terminal \u201csubmitted\u201d state (or whatever final step represents completion); in every other step it must be unset/null."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Primary Invariant**\n\nThe wizard state must always reflect exactly one discrete phase of the journe...",
+        "response_full": "**Primary Invariant**\n\nThe wizard state must always reflect exactly one discrete phase of the journey: e.g., `CollectingStep(stepIndex, formData)`, `Reviewing(formData)`, `Submitting(formData)`, or `Completed(result)`. Each variant guarantees:\n\n- `Current Step` and `Form Data` exist together when the user is entering answers (`CollectingStep`).\n- `Submission Result` exists only in `Completed`.\n- `Form Data` is immutable/validated for the step it belongs to\u2014never split across unrelated flags.\n- Transition functions move between variants atomically (e.g., `collect(stepIndex, data) -> CollectingStep`, `submit(data) -> Submitting`, `finish(result) -> Completed`).\n\n**Invariant statement:** \u201cAt any point the wizard is in exactly one tagged state, and that state fully defines which combination of step index, form data, and submission result are valid\u2014no two flags can be true at once and no field exists unless its state allows it.\u201d"
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "Equal",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Both solutions capture the invariant that the wizard occupies exactly one discrete state, so they rate equally on the principle, but Solution B pairs each tagged state with named transition helpers and exhaustiveness guidance, giving it a slight edge in maintainability and flexibility, which makes it the better all\u2011around implementation."
+  },
+  "provider": "codex"
+}

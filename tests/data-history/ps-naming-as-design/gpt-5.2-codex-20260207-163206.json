@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T16:37:22",
+  "skill": "ps-naming-as-design",
+  "severity": "WARN",
+  "model": "gpt-5.2-codex",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "vague",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_generic_names",
+      "baseline": {
+        "pass": true,
+        "response_preview": "1. `VAR users = []`  \n2. `FUNCTION processUserRecords(records)`  \n3. `CONST MIN_AGE = 10`",
+        "response_full": "1. `VAR users = []`  \n2. `FUNCTION processUserRecords(records)`  \n3. `CONST MIN_AGE = 10`"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "I don\u2019t see that skill in the available list, so I can\u2019t load its `SKILL.md`. I\u2019ll apply the guidanc...",
+        "response_full": "I don\u2019t see that skill in the available list, so I can\u2019t load its `SKILL.md`. I\u2019ll apply the guidance directly.\n\nRefactors:\n1. `VAR registeredUsers = []`  \n2. `FUNCTION validateRegistrationInput(input)`  \n3. `CONST MINIMUM_AGE = 10`"
+      }
+    },
+    {
+      "name": "identify_naming_violations",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Because it encodes two responsibilities in one name, which signals a leaky abstraction. \u201cNaming as D...",
+        "response_full": "Because it encodes two responsibilities in one name, which signals a leaky abstraction. \u201cNaming as Design\u201d pushes you to name things for a single, cohesive behavior. `saveUserAndLogActivity` exposes internal steps and implies the function does two jobs (persistence + logging), so the name reveals a design smell rather than a clear capability. A better design is either a higher-level name that represents one intent (e.g., `registerUser`) or split into two functions and name each for its single responsibility."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "I don\u2019t see a skill matching that description in the available skills list, so I can\u2019t load a `SKILL...",
+        "response_full": "I don\u2019t see a skill matching that description in the available skills list, so I can\u2019t load a `SKILL.md`. I\u2019ll answer directly.\n\n`saveUserAndLogActivity` violates the Naming as Design principle because the name exposes two distinct responsibilities (`saveUser` and `logActivity`). The \u201cAnd\u201d signals mixed concerns, which means the design is likely conflating persistence and auditing. A good name should reveal a single purpose, and if both actions are required, they should be separate, clearly named operations or a higher-level domain action that captures the *why* (e.g., `registerUser` if logging is part of registration invariants)."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "vague",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A is internally inconsistent and vague: it cites a different function name than shown and doesn\u2019t clearly apply the naming principle to its own examples. Solution B directly addresses intent vs implementation, flags the mixed-responsibility \u201cAnd\u201d name, and proposes clearer domain-focused alternatives, making it more maintainable and aligned with the principle."
+  },
+  "provider": "codex"
+}

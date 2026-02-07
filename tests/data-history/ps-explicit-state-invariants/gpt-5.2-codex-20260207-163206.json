@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T16:37:22",
+  "skill": "ps-explicit-state-invariants",
+  "severity": "BLOCK",
+  "model": "gpt-5.2-codex",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_boolean_explosion",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Here\u2019s a discriminated union version that makes invalid combos impossible:\n\n```ts\ntype State =\n  | {...",
+        "response_full": "Here\u2019s a discriminated union version that makes invalid combos impossible:\n\n```ts\ntype State =\n  | { status: 'loading' }\n  | { status: 'error'; error: string }\n  | { status: 'success'; data: unknown };\n\nconst state: State = {\n  status: 'error',\n  error: 'Network timeout',\n};\n```\n\nIf you want to keep `data` strongly typed, replace `unknown` with your data type."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Here\u2019s a discriminated-union style refactor that encodes valid states and eliminates invalid combina...",
+        "response_full": "Here\u2019s a discriminated-union style refactor that encodes valid states and eliminates invalid combinations:\n\n```javascript\n// Invariant: exactly one of these states is true at any time\nconst state =\n    { status: 'idle' }\n  // | { status: 'loading' }\n  // | { status: 'success', data: /* non-null data */ }\n  // | { status: 'error', error: 'Network timeout' };\n\n// Example for the original scenario:\nconst errorState = { status: 'error', error: 'Network timeout' };\n```\n\nThis makes \u201cloading + error\u201d or \u201cerror + data\u201d unrepresentable."
+      }
+    },
+    {
+      "name": "state_invariant_definition",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Primary invariant**  \nThe `CurrentStep` is always consistent with the `FormData` and `SubmissionRe...",
+        "response_full": "**Primary invariant**  \nThe `CurrentStep` is always consistent with the `FormData` and `SubmissionResult`, meaning the UI can only be on a step that is valid for the data collected so far and the submission status.\n\n**Explicit state invariants**  \n1. `CurrentStep` is always within the defined wizard steps (never out of range).  \n2. If `CurrentStep` is after step `i`, then `FormData` for all steps `<= i` is present and valid (per their schemas).  \n3. If `SubmissionResult` is present, then `CurrentStep` must be the final step (or a dedicated \u201cresult\u201d step).  \n4. If `SubmissionResult` is present, then `FormData` must be complete and valid for all steps.  \n5. If `SubmissionResult` indicates failure, `CurrentStep` is either the final step or the step that allows retry/edit; it must not be an earlier, unrelated step.  \n6. If `SubmissionResult` is absent, then the wizard is not in a \u201ccompleted\u201d state; the `CurrentStep` is one of the pre-submission steps."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Primary invariant: the wizard\u2019s `step` determines exactly which subset of `formData` is required/val...",
+        "response_full": "Primary invariant: the wizard\u2019s `step` determines exactly which subset of `formData` is required/valid **and** `submissionResult` is only present when the wizard is in the `Submitted` (or `SubmitFailed`) state, never before.\n\nA clean explicit state model:\n\n```\nTYPE WizardState =\n  | Step1(data1)                      // submissionResult absent\n  | Step2(data1, data2)\n  | Step3(data1, data2, data3)\n  | Submitting(allData)\n  | Submitted(allData, result)\n  | SubmitFailed(allData, error)\n```\n\nInvariants (explicit):\n1. Exactly one state at a time.\n2. `step` implies required data: e.g., `Step2` always has `data1` and `data2`; `Step1` never has `data2`.\n3. `submissionResult` exists iff state is `Submitted` (or error iff `SubmitFailed`).\n4. `Submitting` has complete data; no partial submission."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "A mentions invariants but keeps them largely as prose and doesn\u2019t encode them into the state model, so invalid states are still representable. B provides a concrete discriminated-union state model for the wizard, making invalid combinations unrepresentable and tying required data to each state, which aligns strongly with the principle. That makes B more maintainable and testable because transitions and required data are explicit in the type-level design."
+  },
+  "provider": "codex"
+}

@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T14:52:25",
+  "skill": "ps-single-direction-data-flow",
+  "severity": "BLOCK",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "detect_circular_dependency",
+      "baseline": {
+        "pass": true,
+        "response_preview": "- Component A writes to Store X.\n- Store X notifies Component B of the change.\n- Component B\u2019s lifec...",
+        "response_full": "- Component A writes to Store X.\n- Store X notifies Component B of the change.\n- Component B\u2019s lifecycle then invokes Component A, which writes back to Store X.\n\nSo the cycle is **Component A \u2192 Store X \u2192 Component B \u2192 Component A \u2192 Store X**, meaning the update chain can loop indefinitely unless one of those steps is guarded (e.g., Component B avoids calling Component A during that lifecycle, or Component A checks if the store actually needs an update)."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "- Data flow trace: Component A owns Store X, writes to it; Store X notifies Component B; B\u2019s lifecyc...",
+        "response_full": "- Data flow trace: Component A owns Store X, writes to it; Store X notifies Component B; B\u2019s lifecycle then invokes an A function that writes Store X again. Because B\u2019s update calls back into A\u2019s Store update, the chain loops (A \u2192 Store X \u2192 B \u2192 A \u2192 Store X).\n- Fix: break the cycle by ensuring B only emits an event or callback that A listens to (without indirectly re-updating Store X inside B\u2019s lifecycle), or have B request the change through a parent-managed handler so Store X is updated just once by its owner."
+      }
+    },
+    {
+      "name": "refactor_bidirectional_sync",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Single Flow**\n\n- Introduce a single source of truth (`user` setter) that pushes the update to head...",
+        "response_full": "**Single Flow**\n\n- Introduce a single source of truth (`user` setter) that pushes the update to header/footer, then `onUserUpdate` simply updates that source.\n\n```javascript\nset user(user) {\n    this._user = user;\n    this.header.user = user;\n    this.footer.user = user;\n}\n\nget user() {\n    return this._user;\n}\n\nfunction onUserUpdate(user) {\n    this.user = user; // single write, downstream sync happens in the setter\n}\n```\n\n- If `header`/`footer` already react to `user` changes (e.g., via props), you can drop their direct sync calls entirely.\n- Next: ensure any downstream logic only reads from `this.user` so the flow stays unidirectional."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "To keep the update flow unidirectional, make the parent (the owner of `user`) the only writer, and h...",
+        "response_full": "To keep the update flow unidirectional, make the parent (the owner of `user`) the only writer, and have the header/footer read from it instead of being pushed updates. For example:\n\n```javascript\nfunction setUser(user) {\n    this.user = user;\n    this.refreshChildren();\n}\n\nfunction refreshChildren() {\n    const sharedUserState = this.user;\n    this.header.render({ user: sharedUserState });\n    this.footer.render({ user: sharedUserState });\n}\n```\n\nNow `onUserUpdate` (or `setUser`) merely updates the owner state, and the header/footer are re-rendered with that source value. If `header` and `footer` are components, they simply accept `user` as a prop/parameter and emit events upward when they need changes, keeping data flowing down and events flowing up with no hidden synchronization."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A still hints at a cycle (B calling A via lifecycle) and resolves it only by centralizing writes in a setter, which sounds better than the loop but doesn\u2019t explicitly enforce the downstream-only contract; Solution B explicitly breaks the cycle by having the owner own the state and re-render children through props/events, so its flow is clearer and more maintainable."
+  },
+  "provider": "codex"
+}

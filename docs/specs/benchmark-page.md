@@ -300,7 +300,7 @@ Per-run pages are not generated. The dashboard reads `benchmarks.json` and links
 - Rating badges (vague/regular/good/outstanding)
 
 ### 4. History Preservation
-- Each benchmark run stored in `tests/results/summary-{benchmark_id}.json`
+- Each benchmark run stored in `tests/data-history/<skill>/<model>-<timestamp>.json`
 - `benchmarks.json` aggregates all benchmarks
 - Previous results never overwritten
 

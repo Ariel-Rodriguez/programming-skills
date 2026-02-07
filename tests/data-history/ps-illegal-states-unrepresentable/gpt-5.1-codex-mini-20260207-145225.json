@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T14:52:25",
+  "skill": "ps-illegal-states-unrepresentable",
+  "severity": "SUGGEST",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "transform_invalid_state",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Type Update**\n\n- Converted `Response` into a discriminated union so success states always include ...",
+        "response_full": "**Type Update**\n\n- Converted `Response` into a discriminated union so success states always include `data` and error states always include `errorMessage`, preventing both from coexisting.\n- Example:\n  ```ts\n  type Response =\n    | { status: 'success'; data: any }\n    | { status: 'error'; errorMessage: string };\n  ```\n\nLet me know if you also want to tighten `data`/`errorMessage` types (e.g., generics or stricter payloads)."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Core Principle Applied**\n- Replaced the primitive `status`/optional fields combo with a discrimina...",
+        "response_full": "**Core Principle Applied**\n- Replaced the primitive `status`/optional fields combo with a discriminated union so success and error states are distinct and statically enforced.\n- Each variant now carries only the data it needs: `Success` has `data`, `Error` has `message`, and no illegal combinations can be expressed.\n\n```\ntype Response =\n  | { kind: 'success'; data: any }\n  | { kind: 'error'; message: string }\n```\n\nNext steps you might consider: 1) Update any parsing/loading code to construct `Response` from raw payloads so the type invariant holds early. 2) Adjust consumer logic to pattern-match on `kind` instead of checking status strings and optional fields."
+      }
+    },
+    {
+      "name": "explain_parse_dont_validate",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Validation vs Parsing**\n\n- Validating data means checking that the incoming raw input obeys the ru...",
+        "response_full": "**Validation vs Parsing**\n\n- Validating data means checking that the incoming raw input obeys the rules your domain cares about: ranges, required fields, relational constraints, etc. It happens while the data is still in a general-purpose shape (e.g., JSON, query parameters). The goal is to catch bad input before you try to do anything with it.\n\n- Parsing into domain types is the act of transforming that validated raw data into your strongly typed structures (e.g., enums, records, value objects) so that the compiler/runtime can enforce invariants. Once parsed, the type system can make illegal states unrepresentable because only valid combinations exist in that type.\n\n- In short: validation is the guardrail that filters raw inputs, while parsing into domain types is the step that encodes those guarantees in types so downstream code can\u2019t even express invalid states."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Parsing vs. Validating**\n\n- Validating data means you receive raw inputs and then check them with ...",
+        "response_full": "**Parsing vs. Validating**\n\n- Validating data means you receive raw inputs and then check them with conditionals (e.g., `if (!id || status !== \"active\") throw`). It leaves you working with the original primitive shapes so you have to remember those checks everywhere else.\n- Parsing into domain types means you immediately transform the raw input into a tightly constrained type (e.g., `type ActiveUser = { status: \"active\"; id: UserId; }`). The parser either returns that type or fails, so downstream code can only work with guaranteed-valid states.\n- In short, validation is \u201ccheck then keep the same structure,\u201d whereas parsing is \u201cturn raw data into a new structure that can never represent an illegal state.\u201d"
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "Equal",
+    "quality_better": "Equal",
+    "overall_better": "Equal",
+    "option_a_rating": "good",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Both solutions replace the primitive status/optional fields pattern with a discriminated union that makes success and error states mutually exclusive, so they equally embody the principle and avoid runtime checks. Neither goes beyond that core change, so their maintainability and flexibility are on par. Without additional context, there\u2019s no clear reason to prefer one implementation over the other."
+  },
+  "provider": "codex"
+}

@@ -77,14 +77,60 @@ def _safe_model_for_id(model: str) -> str:
 
 
 def _find_latest_summary(results_dir: Path) -> Path | None:
-    candidates = list(results_dir.glob("summary-*.json"))
+    candidates = (
+        list(results_dir.glob("summary-*.json"))
+        + list(results_dir.glob("summary.json"))
+        + list(results_dir.glob("*.json"))
+    )
     if not candidates:
         return None
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0]
 
 
-def collect_and_generate(results_dir: Path, output_dir: Path) -> bool:
+def _write_history_from_summary(summary_path: Path, history_dir: Path, provider: str | None = None) -> bool:
+    try:
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error reading summary {summary_path}: {e}")
+        return False
+
+    timestamp = data.get("timestamp", "")
+    stamp = _timestamp_for_id(timestamp)
+    results = data.get("results", [])
+
+    for result in results:
+        skill = result.get("skill", "unknown")
+        model = result.get("model", "unknown")
+        out_dir = history_dir / skill
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / f\"{model}-{stamp}.json\"
+
+        payload = {
+            \"timestamp\": timestamp,
+            \"skill\": skill,
+            \"severity\": result.get(\"severity\"),
+            \"model\": model,
+            \"baseline_rate\": result.get(\"baseline_rate\"),
+            \"skill_rate\": result.get(\"skill_rate\"),
+            \"baseline_rating\": result.get(\"baseline_rating\"),
+            \"skill_rating\": result.get(\"skill_rating\"),
+            \"baseline_pass_count\": result.get(\"baseline_pass_count\"),
+            \"skill_pass_count\": result.get(\"skill_pass_count\"),
+            \"improvement\": result.get(\"improvement\"),
+            \"results\": result.get(\"results\", []),
+        }
+        if result.get(\"judgment\") is not None:
+            payload[\"judgment\"] = result.get(\"judgment\")
+        if provider:
+            payload[\"provider\"] = provider
+
+        out_file.write_text(json.dumps(payload, indent=2))
+
+    return True
+
+
+def collect_and_generate(history_dir: Path, output_dir: Path) -> bool:
     """
     Collect benchmark data and generate HTML.
 
@@ -97,7 +143,7 @@ def collect_and_generate(results_dir: Path, output_dir: Path) -> bool:
     """
     from generate_dashboard_data import generate_dashboard_data
     # Generate aggregated JSON and per-run data.json files
-    if not generate_dashboard_data(results_dir, output_dir):
+    if not generate_dashboard_data(history_dir, output_dir):
         print("Error generating dashboard data")
         return False
 
@@ -124,14 +170,15 @@ def push_to_orphan_branch(repo_path: Path, docs_dir: Path, branch_name: str) -> 
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Publish benchmark results")
-    parser.add_argument("--provider", required=True, help="Provider name")
-    parser.add_argument("--model", required=True, help="Model name")
+    parser.add_argument("--provider", help="Provider name")
+    parser.add_argument("--model", help="Model name")
     parser.add_argument("--skill", help="Optional specific skill to test")
     parser.add_argument("--branch", default="benchmark-history", help="Orphan branch name")
     parser.add_argument("--no-benchmark", action="store_true", help="Skip benchmark run")
     parser.add_argument("--no-push", action="store_true", help="Skip pushing to orphan branch")
     parser.add_argument("--benchmarks-dir", help="Deprecated (unused)")
     parser.add_argument("--results-dir", help="Directory containing summary.json (default: tests/results)")
+    parser.add_argument("--history-dir", help="Directory containing per-skill history (default: tests/data-history)")
     parser.add_argument("--output-dir", help="Directory to write generated files")
     parser.add_argument("--summary-path", help="Path to summary json (overrides results-dir)")
 
@@ -142,6 +189,7 @@ def main() -> int:
         print("Warning: --benchmarks-dir is deprecated and ignored.")
 
     results_dir = Path(args.results_dir) if args.results_dir else repo_path / "tests" / "results"
+    history_dir = Path(args.history_dir) if args.history_dir else repo_path / "tests" / "data-history"
     output_dir = Path(args.output_dir) if args.output_dir else repo_path / "site" / "benchmarks"
 
     # Ensure docs directory exists (may not exist if no docs yet)
@@ -149,13 +197,16 @@ def main() -> int:
 
     # Step 1: Run benchmark if requested
     if not args.no_benchmark:
+        if not args.provider or not args.model:
+            print("Error: --provider and --model are required unless --no-benchmark is set")
+            return 1
         if not run_benchmark(args.provider, args.model, args.skill):
             print("Benchmark run failed")
             return 1
     else:
         print("Skipping benchmark run")
 
-    # Step 2: Resolve summary input
+    # Step 2: Resolve summary input (optional import into history)
     if args.summary_path:
         summary_path = Path(args.summary_path)
     else:
@@ -165,19 +216,14 @@ def main() -> int:
             if latest:
                 summary_path = latest
 
-    if not summary_path.exists():
-        print(f"Summary not found at {summary_path}")
-        return 1
-
-    # Step 3: Ensure summary-<benchmark_id>.json exists
-    timestamp = _load_summary_timestamp(summary_path)
-    timestamp_id = _timestamp_for_id(timestamp)
-    benchmark_id = f"{args.provider}-{_safe_model_for_id(args.model)}-{timestamp_id}"
-    summary_out = results_dir / f"summary-{benchmark_id}.json"
-    if summary_path.name == summary_out.name:
-        print(f"Using existing summary: {summary_out}")
+    if summary_path.exists():
+        history_dir.mkdir(parents=True, exist_ok=True)
+        provider = args.provider if args.provider else None
+        if not _write_history_from_summary(summary_path, history_dir, provider):
+            print("Failed to import summary into history")
+            return 1
     else:
-        shutil.copy2(summary_path, summary_out)
+        print(f"Summary not found at {summary_path} (skipping import)")
 
     # Step 4: Sync static site assets into output directory
     source_dir = repo_path / "src" / "pages" / "benchmarks"
@@ -196,7 +242,7 @@ def main() -> int:
 
     # Step 5: Generate dashboard data files
     print("\nGenerating dashboard data...")
-    if not collect_and_generate(results_dir, output_dir):
+    if not collect_and_generate(history_dir, output_dir):
         print("Dashboard generation failed")
         return 1
 

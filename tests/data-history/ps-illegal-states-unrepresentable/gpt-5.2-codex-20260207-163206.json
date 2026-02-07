@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T16:37:22",
+  "skill": "ps-illegal-states-unrepresentable",
+  "severity": "SUGGEST",
+  "model": "gpt-5.2-codex",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "regular",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "transform_invalid_state",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Here\u2019s a discriminated union that makes `success` require `data` and `error` require `errorMessage`,...",
+        "response_full": "Here\u2019s a discriminated union that makes `success` require `data` and `error` require `errorMessage`, and prevents the other field:\n\n```ts\ntype Response =\n  | { status: 'success'; data: any; errorMessage?: never }\n  | { status: 'error'; errorMessage: string; data?: never };\n```"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "I can\u2019t apply a named skill here because it isn\u2019t in the available skills list for this session. Pro...",
+        "response_full": "I can\u2019t apply a named skill here because it isn\u2019t in the available skills list for this session. Proceeding with the request directly.\n\nHere\u2019s the discriminated union version:\n\n```typescript\ntype Response =\n  | { status: 'success'; data: any }\n  | { status: 'error'; errorMessage: string };\n```\n\nThis makes `data` required only for success and `errorMessage` required only for error, so invalid combinations are unrepresentable."
+      }
+    },
+    {
+      "name": "explain_parse_dont_validate",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Short answer**  \nValidation checks whether raw input is acceptable; parsing constructs a well-type...",
+        "response_full": "**Short answer**  \nValidation checks whether raw input is acceptable; parsing constructs a well-typed domain value that makes invalid states impossible to represent.\n\n**Difference in this context**  \n- **Validating data** means you still have a permissive or \u201craw\u201d representation (often strings, untyped maps, or loose structs) and you check rules on top of it. Even after validation, the data is still in a form that can express illegal states; you\u2019re just asserting that it doesn\u2019t right now.\n- **Parsing data into domain types** means converting raw input into stricter types (e.g., `Email`, `PositiveInt`, `NonEmptyString`, `OrderId`). If the parse succeeds, the resulting value **cannot** represent illegal states by construction.\n\n**Implication for \u201cillegal states unrepresentable\u201d**  \n- Validation is a **runtime check** layered on top of a permissive shape.  \n- Parsing into domain types is a **type-level guarantee**: the illegal state can\u2019t even be formed, so downstream code doesn\u2019t need to re-check.\n\nIf you want, share a concrete example (language, domain), and I can show both approaches side by side."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "You didn\u2019t name a listed skill and this request doesn\u2019t match `skill-creator` or `skill-installer`, ...",
+        "response_full": "You didn\u2019t name a listed skill and this request doesn\u2019t match `skill-creator` or `skill-installer`, so I\u2019m answering directly.\n\nValidating data means you accept a loosely typed or primitive-shaped value, then run checks at runtime to see if it satisfies invariants. The data shape stays the same (often nullable/optional fields and flags), so illegal states remain representable and must be guarded against everywhere. Failures are discovered late, and consumers still need defensive checks.\n\nParsing data into domain types means you take raw input at the boundary and construct *typed* domain values that encode the invariants. If parsing succeeds, you have a value whose type *cannot* represent illegal combinations. If parsing fails, you never produce a domain value at all. Internal code then operates only on domain types, so the compiler enforces correctness and you eliminate most runtime state checks.\n\nIn short:\n- Validation: \u201cIs this value OK?\u201d (illegal states still exist, just flagged)\n- Parsing: \u201cConvert this raw input into a *valid* domain value or fail\u201d (illegal states are unrepresentable)"
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "A",
+    "quality_better": "A",
+    "overall_better": "A",
+    "option_a_rating": "good",
+    "option_b_rating": "regular",
+    "score": 100,
+    "reasoning": "Solution A uses discriminated unions and `never` fields to make illegal states unrepresentable, directly aligning with the principle and showing stronger type-level constraints. Solution B is correct but more basic, omitting the `never` exclusions and adding unnecessary skill-related commentary, so it\u2019s less precise and maintainable. The gap is that A encodes stricter invariants by construction while B leaves more room for misuse."
+  },
+  "provider": "codex"
+}

@@ -18,7 +18,7 @@ Manual GitHub Actions Trigger
     ↓
 Run evaluation for provider/model → tests/results/summary.json
     ↓
-Copy to tests/results/summary-{benchmark_id}.json
+Convert to tests/data-history/<skill>/<model>-<timestamp>.json
     ↓
 Generate dashboard data (pure function)
     ↓
@@ -49,6 +49,11 @@ site/
     └── data/
         └── {benchmark_id}/
             └── data.json          # Per-run data for dashboard
+
+tests/
+└── data-history/
+    └── <skill>/
+        └── <model>-<timestamp>.json
 ```
 
 ## Files

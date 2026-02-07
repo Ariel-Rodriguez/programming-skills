@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T14:52:25",
+  "skill": "ps-error-handling-design",
+  "severity": "WARN",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_swallowed_error",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Refactors the handler so it doesn\u2019t swallow the exception, adds context for observability, and keeps...",
+        "response_full": "Refactors the handler so it doesn\u2019t swallow the exception, adds context for observability, and keeps error-flow explicit.\n\n```javascript\nclass DatabaseSaveError extends Error {\n  constructor(message, user, cause) {\n    super(message);\n    this.name = 'DatabaseSaveError';\n    this.userId = user?.id;\n    this.cause = cause;\n  }\n}\n\nfunction saveUser(user) {\n  try {\n    db.insert(user);\n  } catch (error) {\n    console.error('saveUser failed', {\n      userId: user?.id,\n      message: error.message,\n      stack: error.stack,\n    });\n    throw new DatabaseSaveError('Unable to persist user', user, error);\n  }\n}\n```\n\n- doesn\u2019t swallow the original error, so callers can decide how to recover.\n- centralizes logging for observability and includes useful metadata.\n- wraps the low-level error in a domain-specific error to keep abstractions clean.\n\nNext steps: make sure callers handle or propagate `DatabaseSaveError`, and consider adding automated tests that assert the wrapper behavior."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Error-first save**\n- `saveUser` now returns an explicit `Result`-shaped object so callers must han...",
+        "response_full": "**Error-first save**\n- `saveUser` now returns an explicit `Result`-shaped object so callers must handle both success and failure; recoverable database failures are surfaced as `InfrastructureError` with context instead of being swallowed.\n- The function now distinguishes outcomes: success returns the saved entity (or relevant info) and failure returns structured metadata (`kind`, `reason`, `details`) instead of logging and ignoring the exception.\n\n```javascript\nfunction saveUser(user) {\n  const insertResult = db.insert(user);\n  if (insertResult.success) {\n    return { success: true, value: insertResult.value ?? user };\n  }\n\n  return {\n    success: false,\n    error: {\n      kind: 'InfrastructureError',\n      reason: 'DatabaseInsertFailed',\n      details: insertResult.error?.message ?? 'unknown database error',\n      originalError: insertResult.error,\n    },\n  };\n}\n```\n\nNext steps: have callers inspect `result.success` before proceeding and map failures to appropriate UI/portal responses."
+      }
+    },
+    {
+      "name": "design_validation_flow",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Registration Flow**\n\n- Validate Input: on form submit check the email against RFC 5322-ish regex/f...",
+        "response_full": "**Registration Flow**\n\n- Validate Input: on form submit check the email against RFC 5322-ish regex/format rules; reject with localized \u201cInvalid email address\u201d message and keep focus on that field before calling any backend logic.\n\n- Server-side entry point calls `validateEmail()` and rejects early if invalid, logging the attempted email for diagnostics (but never exposing logs to users). This ensures the client can\u2019t bypass validation.\n\n- Database Layer: upon connection attempt wrap the client call (e.g., `connect()`, `pool.acquire()`) in a try/catch. If the connection fails, return a structured error (`{ type: \"db-connection\", message: \"Could not reach database. Please try again later.\" }`) and trigger an alert banner on the UI; log the full stack trace for ops.\n\n- Existence Check: once the database is accessible, query `SELECT id FROM users WHERE email = ?` inside a transaction; if a row exists, respond with `{ type: \"user-exists\", message: \"An account with this email already exists.\" }`, highlight the email field, and optionally surface an action (\u201cSign in instead\u201d).\n\n- Creation Path: if validation passes and the user doesn\u2019t exist, proceed to hash the password, insert the user, commit, then issue success response.\n\n- Error Handling Design: classify errors into invalid input, recoverable operational (e.g., db connection), and business (user already exists). Each handler maps to a user-facing message, a log level, and a retry strategy: \n  1. Invalid email \u2192 client-side feedback + `400` response; no retry.\n  2. Database connection \u2192 `503` response, exponential retry on the client (with user-visible \u201cRetry\u201d button) and alert to ops.\n  3. User already exists \u2192 `409` response with suggestion to sign in; no automatic retry.\n\n- Monitoring/Alerts: for connection failures, increment a metric/counter to trigger alerts; for repeated invalid email submissions, consider rate limiting."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Registration Flow**\n\n- Define clear result type that separates success from each recoverable failu...",
+        "response_full": "**Registration Flow**\n\n- Define clear result type that separates success from each recoverable failure; e.g.\n  ```ts\n  type RegistrationResult =\n    | Success<{ userId: string }>\n    | Failure<InvalidEmail | UserAlreadyExists | DatabaseUnavailable>;\n  ```\n- Validate input first, returning `Failure<InvalidEmail>` before any side effect; include the invalid email in the error context so callers can log or show it.\n\n- When creating the user record, wrap the persistence call so infrastructure errors map to `DatabaseUnavailable`, while domain checks (like duplicate emails) map to `UserAlreadyExists`. Retry or circuit-breaker is handled at a higher level if recovery might succeed later.\n\n- Expose the flow through one entry-point function whose signature forces callers to handle each branch. For example:\n  ```ts\n  async function registerUser(\n    command: RegisterUserCommand\n  ): Promise<RegistrationResult> {\n    if (!isValidEmail(command.email)) {\n      return Failure({ type: \"InvalidEmail\", value: command.email });\n    }\n\n    const createResult = await userRepo.create(command);\n    if (createResult.isSuccess) {\n      return Success({ userId: createResult.value });\n    }\n\n    return mapRepoError(createResult.error);\n  }\n  ```\n  `mapRepoError` translates infra errors into `DatabaseUnavailable` and domain conflicts into `UserAlreadyExists`.\n\n- At the API boundary, pattern-match the `RegistrationResult`: respond with 400 for `InvalidEmail`, 409 for `UserAlreadyExists`, 503 when the database is unreachable, and only emit 201 when `Success`.\n\n- Non-recoverable issues (unexpected nulls, configuration missing) should throw immediately so the process fails fast; such errors should not get caught and converted into `RegistrationResult`.\n\nNext steps: run any integration tests against the persistence layer and ensure the API consumer handles all branches explicitly."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A still relies on throwing exceptions and treating the Result type as implicit, so it only partially addresses explicit error handling, while Solution B defines explicit Result/Either structures, maps recoverable failures, and keeps the API signature clear. That makes B better aligned with the principle and easier to test/extend."
+  },
+  "provider": "codex"
+}

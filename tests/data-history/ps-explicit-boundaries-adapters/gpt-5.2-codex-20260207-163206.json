@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-07T16:37:22",
+  "skill": "ps-explicit-boundaries-adapters",
+  "severity": "WARN",
+  "model": "gpt-5.2-codex",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_database_leak",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Here\u2019s a refactor that introduces explicit boundaries (ports) and an adapter for the database. The c...",
+        "response_full": "Here\u2019s a refactor that introduces explicit boundaries (ports) and an adapter for the database. The core use case no longer depends on `db` directly.\n\n```js\n// domain/ports/EnrollmentRepository.js\nexport class EnrollmentRepository {\n  getStudentById(_studentId) {\n    throw new Error(\"Not implemented\");\n  }\n\n  createEnrollment(_studentId, _courseId) {\n    throw new Error(\"Not implemented\");\n  }\n}\n```\n\n```js\n// application/enrollStudent.js\nexport function enrollStudent({ enrollmentRepo }) {\n  return function enrollStudentUseCase(studentId, courseId) {\n    const student = enrollmentRepo.getStudentById(studentId);\n    if (student.eligible) {\n      enrollmentRepo.createEnrollment(studentId, courseId);\n    }\n  };\n}\n```\n\n```js\n// adapters/db/DbEnrollmentRepository.js\nimport { EnrollmentRepository } from \"../../domain/ports/EnrollmentRepository.js\";\n\nexport class DbEnrollmentRepository extends EnrollmentRepository {\n  constructor(db) {\n    super();\n    this.db = db;\n  }\n\n  getStudentById(studentId) {\n    return this.db.query(\"SELECT * FROM students WHERE id = ?\", studentId);\n  }\n\n  createEnrollment(studentId, courseId) {\n    return this.db.execute(\"INSERT INTO enrollments ...\", studentId, courseId);\n  }\n}\n```\n\n```js\n// composition root (wiring)\nimport { enrollStudent } from \"./application/enrollStudent.js\";\nimport { DbEnrollmentRepository } from \"./adapters/db/DbEnrollmentRepository.js\";\n\nconst enrollmentRepo = new DbEnrollmentRepository(db);\nconst enrollStudentUseCase = enrollStudent({ enrollmentRepo });\n\nenrollStudentUseCase(studentId, courseId);\n```\n\nThis keeps the business logic in the application layer and moves database access into an adapter, with a clear port (`EnrollmentRepository`) as the boundary."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Below is a minimal refactor that isolates the database behind a port and moves DB logic into an adap...",
+        "response_full": "Below is a minimal refactor that isolates the database behind a port and moves DB logic into an adapter. The core depends only on the port interface.\n\n**Core domain (ports + use case)**\n\n```js\n// ports/StudentRepository.js\nexport class StudentRepository {\n  /** @returns {Promise<{ id: string, eligible: boolean } | null>} */\n  async findById(studentId) {\n    throw new Error('Not implemented');\n  }\n\n  /** @returns {Promise<void>} */\n  async enroll(studentId, courseId) {\n    throw new Error('Not implemented');\n  }\n}\n\n// core/enrollStudent.js\nexport async function enrollStudent(studentId, courseId, studentRepo) {\n  const student = await studentRepo.findById(studentId);\n  if (!student) return { ok: false, reason: 'StudentNotFound' };\n  if (!student.eligible) return { ok: false, reason: 'NotEligible' };\n\n  await studentRepo.enroll(studentId, courseId);\n  return { ok: true };\n}\n```\n\n**Adapter (database implementation)**\n\n```js\n// adapters/DbStudentRepository.js\nimport { StudentRepository } from '../ports/StudentRepository.js';\n\nexport class DbStudentRepository extends StudentRepository {\n  constructor(db) {\n    super();\n    this.db = db;\n  }\n\n  async findById(studentId) {\n    return this.db.query(\n      'SELECT id, eligible FROM students WHERE id = ?',\n      studentId\n    );\n  }\n\n  async enroll(studentId, courseId) {\n    await this.db.execute(\n      'INSERT INTO enrollments (student_id, course_id) VALUES (?, ?)',\n      studentId,\n      courseId\n    );\n  }\n}\n```\n\n**Composition root (wiring)**\n\n```js\n// app.js\nimport { enrollStudent } from './core/enrollStudent.js';\nimport { DbStudentRepository } from './adapters/DbStudentRepository.js';\nimport { db } from './infrastructure/db.js';\n\nconst studentRepo = new DbStudentRepository(db);\n\n// usage\nawait enrollStudent('student-1', 'course-9', studentRepo);\n```\n\nThis keeps business logic in the core, defines a clear port, and isolates DB details in the adapter."
+      }
+    },
+    {
+      "name": "identify_infrastructure_leaks",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Here are the infrastructure leaks I see in that business logic:\n\n1. **Direct HTTP dependency in core...",
+        "response_full": "Here are the infrastructure leaks I see in that business logic:\n\n1. **Direct HTTP dependency in core logic**: `processPayment` embeds `axios` and a concrete transport (`POST`), so your business logic depends on the HTTP client and protocol.\n2. **Hard\u2011coded endpoint**: `'/api/pay'` ties the function to a specific route and deployment topology (API path), which is infrastructure detail.\n3. **Implicit API contract**: The payload shape `{ amount: order.total }` is defined inline, coupling the domain model to an external API schema.\n\nA typical fix is to move `axios` and the route into an adapter (e.g., `PaymentGateway`) and inject it into the business function so the core only deals with a payment port/interface."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Findings**  \nThe infrastructure leak is the direct import and use of `axios` inside business logic...",
+        "response_full": "**Findings**  \nThe infrastructure leak is the direct import and use of `axios` inside business logic. `axios` is an external framework/HTTP client, so the core is depending on an adapter.\n\n**Why it violates the skill**  \n- Core should depend on ports (interfaces), not adapters/frameworks.  \n- Business logic should not know about HTTP or transport details.\n\n**Minimal fix (ports & adapters)**\n\n```javascript\n// core/ports/PaymentGateway.js\nexport class PaymentGateway {\n  async charge(order) {\n    throw new Error('Not implemented');\n  }\n}\n\n// core/domain/processPayment.js\nexport async function processPayment(order, paymentGateway) {\n  return paymentGateway.charge(order);\n}\n\n// adapters/http/AxiosPaymentGateway.js\nimport axios from 'axios';\nimport { PaymentGateway } from '../../core/ports/PaymentGateway.js';\n\nexport class AxiosPaymentGateway extends PaymentGateway {\n  async charge(order) {\n    return axios.post('/api/pay', { amount: order.total });\n  }\n}\n```\n\n**Composition root**\n\n```javascript\nimport { processPayment } from './core/domain/processPayment.js';\nimport { AxiosPaymentGateway } from './adapters/http/AxiosPaymentGateway.js';\n\nconst paymentGateway = new AxiosPaymentGateway();\nawait processPayment(order, paymentGateway);\n```\n\nThis isolates the HTTP client behind a port and keeps the core free of external dependencies."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B cleanly defines async ports in the core, keeps domain logic pure, and shows clear adapter wiring, which aligns tightly with ports-and-adapters. Solution A generally follows the pattern but mixes concerns (e.g., unclear sync DB calls, extra commentary about HTTP leaks) and is less precise about boundaries. Overall, B is more coherent, testable, and maintainable."
+  },
+  "provider": "codex"
+}
