@@ -2,6 +2,7 @@
 name: ps-explicit-boundaries-adapters
 description: Isolates frameworks and external systems behind adapters. Use when reviewing code with tight framework coupling or direct API calls in business logic.
 severity: WARN
+version: 1.0.0
 ---
 
 # Explicit Boundaries Adapters

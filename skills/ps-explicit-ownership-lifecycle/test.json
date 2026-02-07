@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_leaky_file_handle",
-        "input": "refactor_leaky_file_handle.js",
+        "name": "resource_cleanup_guarantee",
+        "spec": "A function `process_large_file(path)` opens a file handle to read data. If a parsing error occurs halfway through, the function throws an exception. We've noticed that this leaves the file handle open, eventually causing an \"Too many open files\" error on the server.\n\nFix the code structure so that the file is *always* closed, whether the function succeeds, fails, or crashes.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution use a try/finally block, a 'using' statement, or a RAII pattern to guarantee cleanup?"
         }
     },
     {
-        "name": "design_subscription_owner",
-        "input": "Design a 'Component' structure that manages an event bus subscription. Ensure the subscription doesn't outlive the component. Apply Explicit Ownership Lifecycle.",
+        "name": "event_subscription_leak",
+        "spec": "In our Single Page Application, when a user navigates to the 'Dashboard', the component subscribes to a global WebSocket stream. When they navigate away, the connection seems to stay open, and if they come back, a second connection is opened. This leads to duplicate data and memory leaks.\n\nimplment a pattern for the Dashboard component that ensures the subscription is strictly tied to the component's lifetime.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution explicitly pair the subscription creation with its destruction (e.g., onMount/onUnmount)?"
         }
     }
 ]

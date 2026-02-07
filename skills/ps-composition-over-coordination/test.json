@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_orchestrator_class",
-        "input": "Refactor the following code into small composable units, avoiding a central coordinator. You MUST provide the complete refactored code in a javascript code block:\n\ncoordinator_case.js",
+        "name": "payment_system_design",
+        "spec": "We are building a new payment processing backend. The current requirement is linear: \n1. Authenticate Request\n2. Validate Input\n3. Fraud Check\n4. Charge Card\n5. Save Receipt\n6. Send Email\n\nHowever, we expect the flow to become much more complex soon (e.g., conditional steps, A/B testing different flows). \n\nWrite code to implement this flow. Focus on making it easy to change the order of steps or add new steps without rewriting the whole flow.",
         "expected": {
-            "focus": "Does the refactored code break down the orchestrator into smaller, focused units? Are dependencies explicitly managed? Can units be tested/modified independently?"
+            "focus": "Does the solution use small, independent functions/classes? Does it avoid a single giant function that does everything?"
         }
     },
     {
-        "name": "identify_coordination_bottleneck",
-        "input": "Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck. Mention design principles.",
+        "name": "bottleneck_analysis",
+        "spec": "We have a `LegacyManager` class in our system that takes 15 different service dependencies in its constructor and has methods like `createUser`, `processPayment`, `exportData`, and `sendNewsletter`. \n\nExplain the concrete risks of this design for a team of 10 developers working on this codebase simultaneously.",
         "expected": {
-            "focus": "Does the explanation identify coordination issues like tight coupling, god objects, or SRP violations?"
+            "focus": "Does the answer identify conflicts, testing difficulty, and tight coupling?"
         }
     }
 ]

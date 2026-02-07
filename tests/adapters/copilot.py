@@ -27,9 +27,14 @@ class CopilotCLIAdapter:
         # Try new copilot CLI first, fall back to gh extension
         # The standalone CLI has auth issues with PATs in CI (see: github/copilot-cli#355)
         # So we use gh copilot extension which works better with GITHUB_TOKEN
-        cmd_new = [
-            "copilot", 
-            "-p", prompt,
+        system_note = (
+            "Provide a direct final answer only. Do not list options. "
+            "You cannot edit files; this is a read-only sandbox."
+        )
+
+        cmd_cli = [
+            "copilot",
+            "-p", system_note + "\n\n" + prompt,
             "--model", config.model_name,
             "--silent",
             "--yolo",
@@ -42,31 +47,36 @@ class CopilotCLIAdapter:
             prompt
         ]
         
+        import tempfile
+        
         try:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
-            # Try gh copilot extension (better for CI with PATs)
-            result = subprocess.run(
-                cmd_gh,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=300,
-                env=env,
-                input="\n"  # Auto-select first option
-            )
-            
-            # If gh copilot not available, try standalone copilot CLI
-            if result.returncode != 0 and "gh: unknown command" in result.stderr:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # If gh copilot not available, try standalone copilot CLI
                 result = subprocess.run(
-                    cmd_new,
+                    cmd_cli,
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
-                    timeout=300,
-                    env=env
+                    timeout=600,
+                    env=env,
+                    cwd=tmpdir,  # ISOLATION: prevents discovery of project skills
+                    input="\n"  # Auto-select first option
                 )
+                
+                # Try gh copilot extension (better for CI with PATs)
+                if result.returncode != 0 and "gh: unknown command" in result.stderr:
+                    result = subprocess.run(
+                        cmd_gh,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        timeout=600,
+                        env=env,
+                        cwd=tmpdir  # ISOLATION
+                    )
             
             if result.returncode != 0:
                 stderr = result.stderr.strip()
@@ -81,8 +91,8 @@ class CopilotCLIAdapter:
         
         except subprocess.TimeoutExpired:
             return Failure(
-                "Copilot CLI timeout after 300 seconds",
-                {"timeout": 300}
+                "Copilot CLI timeout after 600 seconds",
+                {"timeout": 600}
             )
         except FileNotFoundError:
             return Failure(
@@ -105,7 +115,7 @@ class CopilotCLIAdapter:
             result = subprocess.run(
                 ["copilot", "--version"],
                 capture_output=True,
-                timeout=5
+                timeout=10
             )
             return result.returncode == 0
         except Exception:

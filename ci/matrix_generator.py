@@ -73,15 +73,15 @@ def generate_matrix(config: Dict[str, Any], filter_provider: str = "all") -> Dic
                 "display_name": f"{provider_name}/{model}"
             }
             
-            # Add provider-specific arguments
-            extra_args = []
-            if provider_name == "ollama":
-                if not provider_config.get("local", True):
-                    extra_args.append("--ollama-cloud")
-            
-            item["extra_args"] = " ".join(extra_args)
+            # Add provider-specific arguments (now handled implicitly in adapter)
+            # extra_args = []
+            # if provider_name == "ollama":
+            #     if not provider_config.get("local", True):
+            #         extra_args.append("--ollama-cloud")
+
+            # item["extra_args"] = " ".join(extra_args)
             matrix["include"].append(item)
-    
+
     return matrix
 
 

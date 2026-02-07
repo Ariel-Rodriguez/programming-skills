@@ -2,6 +2,7 @@
 name: ps-explicit-ownership-lifecycle
 description: Every resource must have clear ownership and lifetime. Use when reviewing resource management, subscriptions, or cleanup code.
 severity: WARN
+version: 1.0.0
 ---
 
 # Explicit Ownership Lifecycle

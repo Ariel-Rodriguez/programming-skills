@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_boolean_explosion",
-        "input": "refactor_boolean_explosion.js",
+        "name": "ui_state_flags_bug",
+        "spec": "Our UI component tracks data loading with three separate flags: `isLoading`, `isSuccess`, and `isError`. \n\nWe keep receiving bug reports where the \"Loading...\" spinner is visible *on top of* the Error message (isLoading=true, isError=true). \n\nRedesign the state structure to make this UI bug impossible to represent in data.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution combine the flags into a single status field or union type?"
         }
     },
     {
-        "name": "state_invariant_definition",
-        "input": "What is the primary invariant for a 'multi-step Wizard' state that has: 1. Current Step, 2. Form Data, 3. Submission Result? Apply Explicit State Invariants.",
+        "name": "wizard_step_dependency",
+        "spec": "We are building a checkout wizard. Step 2 (Shipping) requires the address from Step 1 (Contact). Step 3 (Payment) requires the shipping method from Step 2.\n\nCurrently, developers often try to render the Payment screen with an empty address, causing a crash. \n\nDefine a data structure for this wizard that enforces these dependencies. It should be a compile-time (or runtime structure) error to try to access Payment info if Shipping info doesn't exist.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the data structure nest the steps or use a state machine logic to prevent out-of-order execution?"
         }
     }
 ]

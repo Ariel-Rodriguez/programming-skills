@@ -1,0 +1,60 @@
+{
+  "skill": "ps-minimize-mutation",
+  "severity": "WARN",
+  "model": "rnj-1:8b",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "cart_bug_fix",
+      "input": "We have a bug in our shopping cart. When a user opens the \"Preview\" modal and adds an item to see the shipping cost, that item gets added to their *actual* cart because we passed the cart object by reference. \n\nFix the `preview_item(cart, item)` function so it calculates the new total *without* modifying the original cart object.",
+      "expected": {
+        "focus": "Does the solution create a copy of the cart or use a new array/object?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "```python\ndef preview_item(cart, item):\n    \"\"\"\n    Calculate the new total without modifying the or...",
+        "response_full": "```python\ndef preview_item(cart, item):\n    \"\"\"\n    Calculate the new total without modifying the original cart object.\n\n    Args:\n        cart (dict): The original cart object.\n        item (dict): The item to be added to the cart.\n\n    Returns:\n        dict: A new cart object with the item added.\n    \"\"\"\n    # Create a copy of the original cart object\n    new_cart = cart.copy()\n\n    # Add the item to the new cart\n    new_cart['items'].append(item)\n\n    # Calculate the new total\n    new_total = sum(item['price'] for item in new_cart['items'])\n\n    # Add the new total to the new cart\n    new_cart['total'] = new_total\n\n    return new_cart\n```"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "```python\ndef preview_item(cart, item):\n    \"\"\"\n    Calculate the new total without modifying the or...",
+        "response_full": "```python\ndef preview_item(cart, item):\n    \"\"\"\n    Calculate the new total without modifying the original cart object.\n    \n    Args:\n        cart (dict): The original cart object with 'items' and 'total' keys\n        item (dict): The item to add for preview\n    \n    Returns:\n        dict: A new cart object with the preview total\n    \"\"\"\n    # Create a deep copy of the cart to avoid modifying the original\n    preview_cart = {\n        'items': cart['items'][:],  # Copy the items list\n        'total': cart['total']      # Copy the total\n    }\n    \n    # Add the new item to the preview cart\n    preview_cart['items'].append(item)\n    \n    # Calculate the new total\n    preview_cart['total'] = sum(item['price'] for item in preview_cart['items'])\n    \n    return preview_cart\n```"
+      }
+    },
+    {
+      "name": "default_config_danger",
+      "input": "Our `initialize_widget(config = {})` function sets `config.isEnabled = true`. \n\nA developer called this function with a shared constant `DEFAULT_OPTS`. Now, every other widget on the page is accidentally enabled because the shared object was modified.\n\nrewrite the initialization logic to prevent this side effect.",
+      "expected": {
+        "focus": "Does the solution treated the input object as read-only?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To prevent the side effect of modifying a shared object, we can create a new object for each widget ...",
+        "response_full": "To prevent the side effect of modifying a shared object, we can create a new object for each widget initialization. Here's how you can rewrite the `initialize_widget` function:\n\n```python\ndef initialize_widget(config=None):\n    if config is None:\n        config = {}\n    # Create a new dictionary to avoid modifying the shared object\n    config = config.copy()\n    config['isEnabled'] = True\n    return config\n\n# Example usage:\nDEFAULT_OPTS = {}\nwidget_config = initialize_widget(DEFAULT_OPTS)\nprint(widget_config)  # Output: {'isEnabled': True}\nprint(DEFAULT_OPTS)   # Output: {} (remains unchanged)\n```\n\nIn this solution, we ensure that each call to `initialize_widget` creates a new dictionary based on the provided `config` (or an empty dictionary if none is provided). This prevents any modifications to the shared `DEFAULT_OPTS` object."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "```python\n# Initialize widget with a copy of the config to avoid mutating the shared object\ndef init...",
+        "response_full": "```python\n# Initialize widget with a copy of the config to avoid mutating the shared object\ndef initialize_widget(config=None):\n    \"\"\"\n    Initialize a widget with the provided configuration.\n    \n    Args:\n        config (dict): Configuration options for the widget. If None, uses an empty dict.\n    \n    Returns:\n        dict: A new configuration object that is not linked to the original config.\n    \"\"\"\n    # Create a copy of the config to avoid mutating the original object\n    if config is None:\n        config = {}\n    else:\n        # Create a shallow copy of the config to prevent side effects\n        config = config.copy()\n    \n    # Set the isEnabled flag to True\n    config['isEnabled'] = True\n    \n    return config\n\n# Example usage:\nDEFAULT_OPTS = {\n    'theme': 'light',\n    'size': 'medium'\n}\n\n# This will not modify DEFAULT_OPTS\nwidget_config = initialize_widget(DEFAULT_OPTS)\nprint(widget_config)  # {'theme': 'light', 'size': 'medium', 'isEnabled': True}\nprint(DEFAULT_OPTS)   # {'theme': 'light', 'size': 'medium'} - unchanged\n```"
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B demonstrates a clear understanding of the principle by creating deep copies of objects to prevent unintended side effects. It properly handles the immutability principle by ensuring that modifications to the preview cart do not affect the original cart. Solution A, while functional, does not fully address the principle by still allowing potential side effects through the use of shallow copies. Solution B is more maintainable and testable because it avoids shared mutable state, making it easier to reason about and test. The use of deep copies ensures that the original data remains unchanged, which is critical for maintaining data integrity."
+  },
+  "timestamp": "2026-02-07T22:55:27",
+  "provider": "ollama"
+}

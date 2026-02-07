@@ -46,6 +46,51 @@ def save_summary(
     return fs.write_text(output_path, content)
 
 
+def save_history(
+    results: tuple[EvaluationResult, ...],
+    history_dir: Path,
+    provider: str,
+    timestamp_id: str,
+    timestamp_iso: str,
+    fs: FileSystemPort
+) -> Result:
+    """
+    Save per-skill history files for a benchmark run.
+
+    Args:
+        results: Evaluation results to save
+        history_dir: Base history directory
+        provider: Provider name
+        timestamp: Timestamp string (YYYYMMDD-HHMMSS)
+        fs: Filesystem port
+
+    Returns:
+        Success or Failure result
+    """
+    def _clean_name(value: str) -> str:
+        return value.replace("/", "-").replace(":", "-")
+
+    for result in results:
+        skill_dir = history_dir / result.skill_name
+        fs.mkdir(skill_dir)
+
+        model_clean = _clean_name(result.model)
+        filename = f"{model_clean}-{timestamp_id}.json"
+        output_path = skill_dir / filename
+
+        payload = _serialize_evaluation_result(result)
+        payload["timestamp"] = timestamp_iso
+        payload["skill"] = result.skill_name
+        payload["provider"] = provider
+
+        content = json.dumps(payload, indent=2)
+        write_result = fs.write_text(output_path, content)
+        if isinstance(write_result, Failure):
+            return write_result
+
+    return Success("ok")
+
+
 def generate_console_report(summary_path: Path, fs: FileSystemPort) -> str:
     """
     Generate console report from summary.json.
@@ -252,6 +297,7 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
         "skill": result.skill_name,
         "severity": result.severity.value,
         "model": result.model,
+        "skill_version": result.skill_version,
         "baseline_rate": result.baseline_pass_rate,
         "skill_rate": result.skill_pass_rate,
         "baseline_rating": result.baseline_rating,
@@ -259,9 +305,12 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
         "baseline_pass_count": result.baseline_pass_count,
         "skill_pass_count": result.skill_pass_count,
         "improvement": result.improvement,
+        "judge_error": result.judge_error,
         "results": [
             {
                 "name": baseline.test_name,
+                "input": baseline.input,
+                "expected": baseline.expected,
                 "baseline": {
                     "pass": baseline.passed,
                     "response_preview": baseline.response_preview,

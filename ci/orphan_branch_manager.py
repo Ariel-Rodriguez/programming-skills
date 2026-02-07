@@ -80,7 +80,7 @@ class OrphanBranchManager:
         Returns:
             True if branch exists, False otherwise
         """
-        result = self._run_git("rev-parse", "--verify", self.branch_name, "2>/dev/null")
+        result = self._run_git("show-ref", "--verify", f"refs/heads/{self.branch_name}")
         return result.success
 
     def create_orphan_branch(self) -> GitResult:
@@ -133,7 +133,19 @@ class OrphanBranchManager:
 
         try:
             import shutil
-            shutil.copytree(source_dir, dest, dirs_exist_ok=True)
+            if dest_dir:
+                shutil.copytree(source_dir, dest, dirs_exist_ok=True)
+                return GitResult(success=True, message=f"Copied files to {dest}")
+
+            for item in source_dir.iterdir():
+                target = dest / item.name
+                if item.is_dir():
+                    if target.exists():
+                        shutil.rmtree(target)
+                    shutil.copytree(item, target)
+                else:
+                    shutil.copy2(item, target)
+
             return GitResult(success=True, message=f"Copied files to {dest}")
         except Exception as e:
             return GitResult(success=False, message=str(e))
@@ -234,17 +246,33 @@ def manage_benchmark_branch(
         return False
     print(f"Checked out branch: {branch_name}")
 
-    # Clean branch
+    # Clean branch (remove tracked + untracked)
+    result = manager._run_git("rm", "-rf", ".")
+    if not result.success:
+        print(f"Warning: Could not remove tracked files: {result.message}")
+
     result = manager.clean_untracked()
     if not result.success:
         print(f"Warning: Could not clean untracked files: {result.message}")
 
-    # Copy docs to branch
-    result = manager.copy_files_to_branch(docs_dir)
-    if not result.success:
-        print(f"Error copying files: {result.message}")
-        return False
-    print(f"Copied docs to branch")
+    # Copy output to branch (if exists)
+    if docs_dir.exists():
+        result = manager.copy_files_to_branch(docs_dir)
+        if not result.success:
+            print(f"Error copying files: {result.message}")
+            return False
+        print(f"Copied output to branch")
+    else:
+        print(f"Warning: output directory does not exist: {docs_dir}")
+        print("Creating minimal output structure...")
+        # Create a minimal output folder with a README
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "README.md").write_text("# Benchmark Data\n\nThis branch contains benchmark results for the programming skills project.\n")
+        result = manager.copy_files_to_branch(docs_dir)
+        if not result.success:
+            print(f"Error copying files: {result.message}")
+            return False
+        print(f"Copied output to branch")
 
     # Add and commit
     result = manager.add_all_files()

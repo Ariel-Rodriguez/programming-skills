@@ -21,88 +21,40 @@ on:
         type: string
 
 jobs:
-  run-benchmark:
+  run-benchmark-and-publish:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-          path: workspace
+          path: repo
 
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
       - name: Run benchmark
-        working-directory: workspace
+        working-directory: repo
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          # Install dependencies
           uv sync --project tests
-          # Run benchmark
           uv run --project tests tests/evaluator.py \
             --provider ${{ inputs.provider }} \
             --model ${{ inputs.model }} \
             --judge \
             --verbose \
-            --report
-          # Rename artifact for clarity
-          if [ -d tests/results ]; then
-            ARTIFACT_NAME="benchmark-${{ inputs.provider }}-${{ inputs.model }}-$(date +%Y%m%d-%H%M%S)"
-            mv tests/results "tests/${ARTIFACT_NAME}"
-          fi
-          # Create docs/benchmarks if it doesn't exist for publish_benchmarks.py
-          mkdir -p docs/benchmarks
+            --report \
+            --all
 
-      - name: Generate dashboard
-        working-directory: workspace
+      - name: Publish to benchmark-history branch
+        working-directory: repo
         run: |
+          # Run publish_benchmarks.py with correct paths
           uv run --project tests python3 ci/publish_benchmarks.py \
             --provider ${{ inputs.provider }} \
             --model ${{ inputs.model }} \
             --branch benchmark-history \
-            --no-benchmark
-
-      - name: Generate dashboard
-        working-directory: workspace
-        run: |
-          uv run --project tests python3 ci/publish_benchmarks.py \
-            --provider ${{ inputs.provider }} \
-            --model ${{ inputs.model }} \
-            --branch benchmark-history
-
-  deploy-pages:
-    needs: run-benchmark
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout workspace
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: workspace
-
-      - name: Checkout benchmark data
-        uses: actions/checkout@v4
-        with:
-          ref: benchmark-history
-          path: benchmark-data
-
-      - name: Copy results to docs
-        run: |
-          mkdir -p workspace/docs/benchmarks
-          cp benchmark-data/docs/benchmarks.json workspace/docs/benchmarks.json 2>/dev/null || true
-          cp benchmark-data/docs/index.html workspace/docs/index.html 2>/dev/null || true
-          # Also copy individual benchmark results if they exist
-          cp -r benchmark-data/docs/benchmarks/*.json workspace/docs/benchmarks/ 2>/dev/null || true
-
-      - name: Commit and push updates
-        working-directory: workspace
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add docs/
-          git commit -m "Update benchmark data" || echo "No changes to commit"
-          git push origin HEAD:benchmark-history
+            --no-benchmark \
+            --output-dir "site/benchmarks"

@@ -107,11 +107,6 @@ jobs:
           # Construct arguments array for safety
           ARGS=(--provider "${{ matrix.provider }}" --model "${{ matrix.model }}" --judge --verbose --report --threshold 50)
 
-          if [ -n "${{ matrix.extra_args }}" ]; then
-            # Split extra_args safely if needed, but for now assuming simple flags
-            ARGS+=(${{ matrix.extra_args }})
-          fi
-
           if [ -n "${{ matrix.skill }}" ]; then
             ARGS+=(--skill "${{ matrix.skill }}")
           else
@@ -128,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: pr-code/tests/results/
+          path: pr-code/tests/data-history/
           retention-days: 1
 
   consolidate:
@@ -145,10 +140,10 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: pr-code/tests/results/
+          path: pr-code/tests/data-history/
 
       - name: Consolidate results
-        run: python3 trusted-scripts/ci/consolidate_results.py --results-dir pr-code/tests/results --output-file pr-code/comment.md
+        run: python3 trusted-scripts/ci/consolidate_results.py --results-dir pr-code/tests/data-history --output-file pr-code/comment.md
 
       - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2

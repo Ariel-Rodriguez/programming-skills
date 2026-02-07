@@ -1,0 +1,60 @@
+{
+  "skill": "ps-local-reasoning",
+  "severity": "WARN",
+  "model": "rnj-1:8b",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "vague",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "spaghetti_dependencies",
+      "input": "The `calculate_invoice_total(invoice_id)` function is hard to debug. To know what it will return, you have to check the state of the Global Feature Flags, the Session Singleton, and the current system time.\n\nRewrite this function so that its behavior is completely deterministic based *only* on its input arguments.",
+      "expected": {
+        "focus": "Does the refactor pass the feature flags, session data, and time in as arguments?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To make the `calculate_invoice_total(invoice_id)` function deterministic based only on its input arg...",
+        "response_full": "To make the `calculate_invoice_total(invoice_id)` function deterministic based only on its input arguments, we need to eliminate any dependencies on external state such as Global Feature Flags, Session Singleton, and current system time. Here's how you can refactor the function:\n\n```python\ndef calculate_invoice_total(invoice_id):\n    \"\"\"\n    Calculate the total for a given invoice based solely on the invoice_id.\n    \n    Parameters:\n    invoice_id (int): The unique identifier for the invoice.\n    \n    Returns:\n    float: The total amount for the invoice.\n    \"\"\"\n    # Example deterministic logic based on invoice_id\n    # This is a placeholder for actual invoice total calculation logic\n    # Replace this with actual logic to calculate the total based on invoice_id\n    invoice_totals = {\n        101: 250.75,\n        102: 150.00,\n        103: 300.50,\n        # Add more invoice IDs and their totals as needed\n    }\n    \n    # Return the total for the given invoice_id, or 0.0 if the invoice_id is not found\n    return invoice_totals.get(invoice_id, 0.0)\n```\n\nIn this refactored version, the `calculate_invoice_total` function is now deterministic based solely on the `invoice_id` input argument. The function uses a dictionary to map invoice IDs to their respective totals, ensuring that the output is completely determined by the input. This approach eliminates any reliance on external state or system time, making the function predictable and testable."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "To make the `calculate_invoice_total(invoice_id)` function deterministic and easy to understand, we ...",
+        "response_full": "To make the `calculate_invoice_total(invoice_id)` function deterministic and easy to understand, we need to eliminate hidden dependencies. Here's how to refactor it:\n\n```python\ndef calculate_invoice_total(invoice_id, feature_flags, session, current_time):\n    \"\"\"\n    Calculate the total for an invoice with explicit dependencies.\n    \n    Args:\n        invoice_id: The ID of the invoice to calculate\n        feature_flags: Configuration flags that affect calculation\n        session: Current user session context\n        current_time: Current timestamp for time-sensitive calculations\n    \n    Returns:\n        The calculated total amount\n    \"\"\"\n    # All dependencies are explicitly passed as parameters\n    # No global state or hidden dependencies\n    pass  # Implementation would go here\n```\n\n**Before:**\n- Hidden dependencies made the function hard to understand and test\n- Global state and external factors affected the result\n- No clear understanding of what inputs affect the output\n\n**After:**\n- All dependencies are explicit parameters\n- Function behavior is completely determined by inputs\n- No hidden state or external factors\n- Easy to test with controlled inputs\n- Clear understanding of what affects the output\n\nThis refactoring makes the function deterministic and maintainable. Any change to behavior must be made by changing the implementation, not by modifying hidden dependencies."
+      }
+    },
+    {
+      "name": "hidden_api_call",
+      "input": "A developer wrote a `User.save()` method. It looks like it just saves to the database, but secretly it also makes an HTTP call to a CRM system if the user is a VIP. This causes the test suite to hang randomly.\n\nWhy is this design problematic for someone reading the code for the first time? How would you fix it to make the side effect explicit?",
+      "expected": {
+        "focus": "Does the solution propose passing the CRM service as a dependency or returning an instruction to sync?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "The design is problematic for several reasons:\n\n1. **Hidden Side Effects**: The `User.save()` method...",
+        "response_full": "The design is problematic for several reasons:\n\n1. **Hidden Side Effects**: The `User.save()` method has a hidden side effect \u2014 making an HTTP call to a CRM system \u2014 which is not immediately obvious from the method name or its implementation. This violates the principle of least astonishment: the method should do exactly what its name suggests.\n\n2. **Unpredictable Behavior**: The HTTP call to the CRM system can cause the test suite to hang randomly, which makes debugging and testing much harder. This is especially problematic in a CI/CD pipeline where tests need to be reliable and fast.\n\n3. **Lack of Clarity**: The code does not clearly communicate its dependencies or side effects, making it harder for other developers to understand and maintain the code.\n\n---\n\n### How to Fix It\n\nTo make the side effect explicit and improve the design, we can:\n\n1. **Separate Concerns**: Split the functionality into smaller, well-defined methods. For example, separate the database save operation from the CRM integration.\n\n2. **Make Side Effects Explicit**: Use dependency injection to make the CRM call explicit and testable.\n\n3. **Use Abstractions**: Introduce interfaces or abstractions for the CRM integration so that the `User.save()` method does not directly perform the HTTP call.\n\nHere\u2019s a conceptual example of how you might refactor the code:\n\n```python\nclass User:\n    def __init__(self, is_vip):\n        self.is_vip = is_vip\n\n    def save(self, db_connection, crm_service):\n        # Save to the database\n        db_connection.save_user(self)\n\n        # Only call CRM if the user is a VIP\n        if self.is_vip:\n            crm_service.notify_user(self)\n\nclass CRMService:\n    def notify_user(self, user):\n        # Simulate HTTP call to CRM system\n        print(f\"CRM: Notifying user {user}\")\n\nclass DatabaseConnection:\n    def save_user(self, user):\n        print(f\"DB: Saving user {user}\")\n\n# Example usage\ndb = DatabaseConnection()\ncrm = CRMService()\nuser = User(is_vip=True)\nuser.save(db, crm)\n```\n\n### Benefits of This Refactor:\n- **Clarity**: The `User.save()` method now clearly separates database and CRM logic.\n- **Testability**: The `CRMService` and `DatabaseConnection` can be mocked in tests, making the tests fast and reliable.\n- **Maintainability**: The code is easier to understand and modify, as each component has a single responsibility.\n\nBy making side effects explicit and separating concerns, the code becomes more robust, maintainable, and testable."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "The code is problematic because it hides a side effect (making an HTTP call to a CRM system) within ...",
+        "response_full": "The code is problematic because it hides a side effect (making an HTTP call to a CRM system) within a method that appears to be only about saving a user. This violates the principle of local reasoning: the method's behavior is not fully understandable just by reading the code.\n\nTo fix this, we should make the side effect explicit by:\n1. Accepting the CRM system dependency as a parameter\n2. Making the HTTP call part of the method's signature\n3. Documenting the side effect in the method name or documentation\n\nHere's how the improved code might look:\n\n```python\nclass User:\n    def save(self, crm_system=None):\n        \"\"\"\n        Save the user to the database.\n        \n        If the user is a VIP and a CRM system is provided,\n        also send the user data to the CRM system.\n        \n        Args:\n            crm_system: Optional CRM system to send user data to if VIP\n        \"\"\"\n        # Save to database\n        # ... existing save logic ...\n        \n        # Only make CRM call if VIP and CRM system provided\n        if self.is_vip() and crm_system is not None:\n            crm_system.send_user_data(self)\n```\n\nThis version makes the side effect explicit:\n1. The CRM system dependency is now a parameter\n2. The CRM call is only made when explicitly provided\n3. The method's behavior is fully understandable from the code\n4. The side effect is documented in the docstring\n\nThis follows the principle of local reasoning: the method's behavior is now fully understandable without needing to trace through other parts of the system."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "vague",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B is significantly better because it fully adheres to the principle of local reasoning by making all dependencies explicit and eliminating hidden side effects. Solution A only partially addresses the issue by adding parameters but still relies on global state. Solution B's approach is more maintainable, testable, and flexible, making it the superior solution."
+  },
+  "timestamp": "2026-02-07T22:55:27",
+  "provider": "ollama"
+}

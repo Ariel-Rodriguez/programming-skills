@@ -2,6 +2,7 @@
 name: ps-minimize-mutation
 description: Mutation must be controlled and localized. Use when reviewing code with scattered mutations or shared mutable state.
 severity: WARN
+version: 1.0.0
 ---
 
 # Minimize Mutation

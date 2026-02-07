@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_mutating_argument",
-        "input": "refactor_mutating_argument.js",
+        "name": "cart_bug_fix",
+        "spec": "We have a bug in our shopping cart. When a user opens the \"Preview\" modal and adds an item to see the shipping cost, that item gets added to their *actual* cart because we passed the cart object by reference. \n\nFix the `preview_item(cart, item)` function so it calculates the new total *without* modifying the original cart object.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution create a copy of the cart or use a new array/object?"
         }
     },
     {
-        "name": "identify_unsafe_mutation",
-        "input": "Why is this code unsafe due to mutation?\n\n```javascript\nconst list = [1, 2, 3];\nprocess(list);\nconsole.log(list); // Might be changed!\n```",
+        "name": "default_config_danger",
+        "spec": "Our `initialize_widget(config = {})` function sets `config.isEnabled = true`. \n\nA developer called this function with a shared constant `DEFAULT_OPTS`. Now, every other widget on the page is accidentally enabled because the shared object was modified.\n\nrewrite the initialization logic to prevent this side effect.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution treated the input object as read-only?"
         }
     }
 ]

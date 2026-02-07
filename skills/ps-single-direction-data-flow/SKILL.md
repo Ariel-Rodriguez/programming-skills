@@ -2,6 +2,7 @@
 name: ps-single-direction-data-flow
 description: Enforces unidirectional data flow with clear ownership. Use when reviewing data flows, debugging race conditions, or designing state management. Prevents ghost updates and synchronization bugs.
 severity: BLOCK
+version: 1.0.0
 ---
 
 # Single Direction of Data Flow

@@ -119,7 +119,7 @@ Edit `config.yaml` to change models, paths, or benchmark settings.
 
 ## Results
 
-Results are saved to `results/summary.json` and include:
+Results are saved to `data-history/summary-<provider>-<model>-<timestamp>.json` and include:
 
 **Standard Metrics:**
 - Baseline pass rate (without skill guidance)

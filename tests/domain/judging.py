@@ -144,22 +144,47 @@ def parse_judgment_response(response: str) -> JudgmentResult:
     import json
     import re
     
-    # Extract JSON from response (might have markdown code blocks)
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
-    if json_match:
-        json_str = json_match.group(1)
-    else:
-        # Try to find raw JSON
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-        else:
-            raise ValueError(f"No JSON found in response: {response[:200]}")
+    # 1. Strip thought blocks (reasoning models like DeepSeek-R1)
+    cleaned_response = re.sub(r'<thought>.*?</thought>', '', response, flags=re.DOTALL | re.IGNORECASE)
     
-    try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in response: {e}") from e
+    # 2. Find all potential { ... } blocks
+    # We use a non-greedy match for the content to find individual objects
+    candidates = re.findall(r'(\{.*?\})', cleaned_response, re.DOTALL)
+    
+    # If no candidates found with non-greedy, try a broader greedy match as fallback
+    if not candidates:
+        json_match = re.search(r'(\{.*\})', cleaned_response, re.DOTALL)
+        if json_match:
+            candidates = [json_match.group(1)]
+    
+    if not candidates:
+        raise ValueError(f"No JSON-like structures found in response. Response slice: {response[:200]}")
+    
+    data = None
+    last_error = None
+    
+    # 3. Try to parse each candidate and validate it
+    for candidate in candidates:
+        try:
+            # Clean up potential markdown formatting within the block if any
+            clean_candidate = candidate.strip()
+            item = json.loads(clean_candidate)
+            
+            # Basic validation: check for AT LEAST one required field
+            # This distinguishes our target JSON from random {braces} in code snippets
+            required_fields = ["option_a_rating", "option_b_rating", "overall_better", "reasoning"]
+            if any(field in item for field in required_fields):
+                data = item
+                break
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+            
+    if data is None:
+        if last_error:
+            raise ValueError(f"Invalid JSON in response: {last_error}. Candidates found: {len(candidates)}")
+        else:
+            raise ValueError(f"No valid judgment JSON found in {len(candidates)} candidates.")
     
     # Validate and extract fields
     option_a_rating = data.get("option_a_rating", "vague").lower().strip()
@@ -172,23 +197,33 @@ def parse_judgment_response(response: str) -> JudgmentResult:
 
     principle_better = data.get("principle_better", "").strip()
     if principle_better not in ["A", "B", "Equal"]:
-        raise ValueError(f"Invalid principle_better: {principle_better}")
+        # Fallback to overall_better if missing
+        overall = data.get("overall_better", "").strip()
+        if overall in ["A", "B", "Equal"]:
+            principle_better = overall
+        else:
+            raise ValueError(f"Invalid principle_better: {principle_better}")
     
     quality_better = data.get("quality_better", "").strip()
     if quality_better not in ["A", "B", "Equal"]:
-        raise ValueError(f"Invalid quality_better: {quality_better}")
+        quality_better = principle_better  # Fallback
+        if quality_better not in ["A", "B", "Equal"]:
+            raise ValueError(f"Invalid quality_better: {quality_better}")
     
     overall_better = data.get("overall_better", "").strip()
     if overall_better not in ["A", "B", "Equal"]:
-        raise ValueError(f"Invalid overall_better: {overall_better}")
+        overall_better = principle_better # Fallback
+        if overall_better not in ["A", "B", "Equal"]:
+            raise ValueError(f"Invalid overall_better: {overall_better}")
     
     reasoning = data.get("reasoning", "").strip()
     if not reasoning:
-        raise ValueError("Missing reasoning")
+        reasoning = data.get("explanation", "").strip()
+        if not reasoning:
+            raise ValueError("Missing reasoning/explanation")
     
     # Note: score is NOT from judge response anymore
     # It will be set by the evaluation service based on test pass rates
-    # Here we use a placeholder that will be replaced
     return JudgmentResult(
         principle_better=principle_better,  # type: ignore
         quality_better=quality_better,  # type: ignore

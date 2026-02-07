@@ -30,12 +30,35 @@ from services import (
     generate_test_suite,
     run_evaluation,
     save_summary,
+    save_history,
     generate_console_report,
     generate_github_comment,
 )
 
 # Adapter imports
-from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter
+from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter, CodexCLIAdapter, GeminiCLIAdapter
+
+
+def _timestamp_id() -> str:
+    import time
+    return time.strftime("%Y%m%d-%H%M%S")
+
+
+def _timestamp_iso() -> str:
+    import time
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _safe_model_name(model_name: str) -> str:
+    return model_name.replace("/", "-").replace(":", "-")
+
+
+def _find_latest_summary(history_dir: Path) -> Path | None:
+    try:
+        candidates = sorted(history_dir.glob("summary-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        return candidates[0] if candidates else None
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -54,7 +77,7 @@ def main() -> int:
     parser.add_argument("--model", help="Model to use (default: llama3.2:latest)")
     parser.add_argument(
         "--provider",
-        choices=["ollama", "copilot"],
+        choices=["ollama", "copilot", "codex", "gemini"],
         default="ollama",
         help="Model provider"
     )
@@ -64,32 +87,57 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
-    parser.add_argument("--results-dir", help="Custom results directory (default: tests/results)")
+    parser.add_argument("--base-url", help="Base URL for model API (default: http://localhost:11434 for Ollama)")
+    parser.add_argument("--history-dir", help="Custom history directory (default: tests/data-history)")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
     fs = RealFileSystem()
     
     # Configuration (Policy)
-    skills_dir = Path("skills")
+    # Resolve skills directory relative to this script (tests/evaluator.py -> root/skills)
+    root_dir = Path(__file__).parent.parent
+    skills_dir = root_dir / "skills"
     
-    # Support custom results directory for parallel execution
-    if args.results_dir:
-        results_dir = Path(args.results_dir)
+    if args.provider == "ollama":
+        provider = Provider.OLLAMA
+    elif args.provider == "copilot":
+        provider = Provider.COPILOT
+    elif args.provider == "gemini":
+        provider = Provider.GEMINI
     else:
-        results_dir = Path("tests/results")
-    
-    summary_path = results_dir / "summary.json"
-    model_name = args.model or "llama3.2:latest"
-    provider = Provider.OLLAMA if args.provider == "ollama" else Provider.COPILOT
+        provider = Provider.CODEX
+
+    if args.model:
+        model_name = args.model
+    else:
+        if provider == Provider.CODEX:
+            model_name = "gpt-5.1-codex-mini"
+        elif provider == Provider.GEMINI:
+            model_name = "gemini-2.5-flash-exp"
+        else:
+            model_name = "rnj-1:8b"
+
+    if args.history_dir:
+        history_dir = Path(args.history_dir)
+    else:
+        history_dir = Path("tests/data-history")
     
     # Handle report-only modes
     if args.report and not args.all and not args.skill:
-        print(generate_console_report(summary_path, fs))
+        latest_summary = _find_latest_summary(history_dir)
+        if latest_summary:
+            print(generate_console_report(latest_summary, fs))
+            return 0
+        print("No summary file found. Run a benchmark first.")
         return 0
     
     if args.github_comment and not args.all and not args.skill:
-        result = generate_github_comment(summary_path, fs)
+        latest_summary = _find_latest_summary(history_dir)
+        if not latest_summary:
+            print("No summary file found. Run a benchmark first.")
+            return 0
+        result = generate_github_comment(latest_summary, fs)
         if is_success(result):
             write_result = fs.write_text(Path("comment.md"), result.value)
             if is_success(write_result):
@@ -112,18 +160,36 @@ def main() -> int:
         # Copilot models have larger context windows
         num_ctx = 64000
     
+    # Determine base URL
+    if args.base_url:
+        base_url = args.base_url
+    elif provider == Provider.OLLAMA:
+        # Default to cloud URL if cloud flag is set or model implies cloud
+        is_cloud = args.ollama_cloud or model_name.lower().endswith("cloud")
+        if is_cloud:
+            base_url = "https://ollama.com"
+        else:
+            base_url = "http://localhost:11434"
+    else:
+        base_url = "http://localhost:11434/v1"
+
     config = ModelConfig(
         provider=provider,
         model_name=model_name,
-        base_url="http://localhost:11434/v1",
+        base_url=base_url,
         num_ctx=num_ctx
     )
     
     # Select model adapter based on provider
     if provider == Provider.OLLAMA:
-        model_port = OllamaAdapter(use_cloud=args.ollama_cloud)
-    else:
+        # Auto-detect cloud usage if model ends with "cloud"
+        model_port = OllamaAdapter(use_cloud=args.ollama_cloud if args.ollama_cloud else None, model_name=model_name)
+    elif provider == Provider.COPILOT:
         model_port = CopilotCLIAdapter()
+    elif provider == Provider.GEMINI:
+        model_port = GeminiCLIAdapter()
+    else:
+        model_port = CodexCLIAdapter()
     
     # Discover skills
     all_skills = discover_skills(skills_dir, fs)
@@ -153,11 +219,20 @@ def main() -> int:
                 print(f"Error: Ollama not running at {config.base_url}")
                 print("Start with: ollama serve")
             return 1
+    if provider == Provider.CODEX:
+        if not model_port.is_available(config):
+            print("Error: Codex CLI not available. Install Codex CLI and sign in with ChatGPT.")
+            return 1
     
-    # Create results directory
-    result = fs.mkdir(results_dir)
+    if provider == Provider.GEMINI:
+        if not model_port.is_available(config):
+            print("Error: Gemini CLI not available. Install with: bun add -g @google/gemini-cli")
+            return 1
+    
+    # Create history directory
+    result = fs.mkdir(history_dir)
     if is_failure(result):
-        print(f"Warning: Could not create results directory: {result.error_message}")
+        print(f"Warning: Could not create history directory: {result.error_message}")
     
     # Run evaluations
     print(f"\n{'=' * 60}")
@@ -213,6 +288,10 @@ def main() -> int:
                 f"Improvement: {eval_result.improvement:+}%"
             )
     
+    timestamp_id = _timestamp_id()
+    timestamp_iso = _timestamp_iso()
+    summary_path = history_dir / f"summary-{config.provider.value}-{_safe_model_name(config.model_name)}-{timestamp_id}.json"
+
     # Save summary
     save_result = save_summary(tuple(all_results), summary_path, fs)
     
@@ -222,6 +301,11 @@ def main() -> int:
         print(f"\n{'=' * 60}")
         print(f"Complete. Summary saved to: {summary_path}")
     
+    # Save per-skill history
+    history_result = save_history(tuple(all_results), history_dir, config.provider.value, timestamp_id, timestamp_iso, fs)
+    if is_failure(history_result):
+        print(f"\nWarning: Failed to save history: {history_result.error_message}")
+
     # Generate reports if requested
     if args.report:
         print(f"\n{generate_console_report(summary_path, fs)}")

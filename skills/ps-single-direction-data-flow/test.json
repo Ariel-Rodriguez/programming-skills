@@ -1,16 +1,16 @@
 [
     {
-        "name": "detect_circular_dependency",
-        "input": "Analyze this data flow and identify the circular dependency:\n\n1. Component A updates Store X.\n2. Store X triggers an update in Component B.\n3. Component B's lifecycle method calls a function in Component A that updates Store X.",
+        "name": "fix_infinite_loop",
+        "spec": "We have a bug where the `ProfileEditor` component updates the `UserStore`, which triggers an event that causes `ProfileEditor` to re-render, which triggers another update... crashing the browser.\n\nDescribe the structural flaw that allows this loop to happen, and propose a data flow pattern that prevents it by design.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution propose a unidirectional flow (Action -> Dispatcher -> Store -> View)?"
         }
     },
     {
-        "name": "refactor_bidirectional_sync",
-        "input": "refactor_bidirectional_sync.js",
+        "name": "state_sync_nightmare",
+        "spec": "Component A (Parent) has `isOpen` state. Component B (Child) also has a local copy of `isOpen` state. They try to keep each other in sync using `useEffect` and callbacks.\n\nThis is causing race conditions where the child is open but the parent thinks it's closed.\n\nRewrite the relationship between these components so there is only *one* source of truth.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the child become a controlled component (props only)?"
         }
     }
 ]

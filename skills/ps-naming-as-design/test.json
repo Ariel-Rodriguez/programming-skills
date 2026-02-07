@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_generic_names",
-        "input": "Refactor these names to encode intent and role instead of implementation:\n\n1. `VAR userArray = []`\n2. `FUNCTION handleData(data)`\n3. `CONST VALUE = 10` (referring to minimum age)",
+        "name": "legacy_code_translation",
+        "spec": "Translate this cryptic legacy code into readable English (code):\n\n```javascript\nconst a = [/*...*/];\nfunction f(x) {\n  return x.filter(i => i.s === 1).map(i => i.v);\n}\n```\n\nAssume `a` is a list of Orders, `s` is Status (1=Active), and `v` is Value.\n\nRewrite usage and function to be self-documenting.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Do the new names (e.g. `activeOrders`, `orderValue`) explain the *domain concept*?"
         }
     },
     {
-        "name": "identify_naming_violations",
-        "input": "Why does the name `saveUserAndLogActivity` violate the Naming as Design principle?",
+        "name": "responsibility_check",
+        "spec": "We have a function named `validateUserAndSaveToDatabaseAndSendEmail`. \n\nWhy is this name a \"smell\"? Suggest how you would restructure the code to allow for better naming.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the answer point out the 'And' implies multiple responsibilities?"
         }
     }
 ]

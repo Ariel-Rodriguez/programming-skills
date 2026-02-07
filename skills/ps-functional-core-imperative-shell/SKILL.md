@@ -2,6 +2,7 @@
 name: ps-functional-core-imperative-shell
 description: Separate pure computation from side effects. Core business logic is pure functions, shell handles IO. Use when mixing calculations with database, HTTP, or file operations.
 severity: BLOCK
+version: 1.0.0
 ---
 
 # Functional Core, Imperative Shell

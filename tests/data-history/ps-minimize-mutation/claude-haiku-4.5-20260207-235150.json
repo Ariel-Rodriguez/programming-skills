@@ -1,0 +1,61 @@
+{
+  "skill": "ps-minimize-mutation",
+  "severity": "WARN",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "cart_bug_fix",
+      "input": "We have a bug in our shopping cart. When a user opens the \"Preview\" modal and adds an item to see the shipping cost, that item gets added to their *actual* cart because we passed the cart object by reference. \n\nFix the `preview_item(cart, item)` function so it calculates the new total *without* modifying the original cart object.",
+      "expected": {
+        "focus": "Does the solution create a copy of the cart or use a new array/object?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "Let me search more broadly for cart-related files:\n\nThe directory appears to be empty. Since you men...",
+        "response_full": "Let me search more broadly for cart-related files:\n\nThe directory appears to be empty. Since you mentioned this is a read-only sandbox and I cannot edit files, I'll provide the direct solution:\n\n**The fix for `preview_item(cart, item)` is to create a shallow copy of the cart object before modifying it:**\n\n```python\n# Python example\ndef preview_item(cart, item):\n    preview_cart = cart.copy()  # Create shallow copy\n    preview_cart['items'].append(item)\n    preview_cart['total'] = calculate_total(preview_cart)\n    return preview_cart\n```\n\n```javascript\n// JavaScript example\nfunction preview_item(cart, item) {\n    const previewCart = { ...cart, items: [...cart.items, item] };\n    previewCart.total = calculateTotal(previewCart);\n    return previewCart;\n}\n```\n\n**The core solution:** Use object spreading (`...`) or `.copy()` to create a shallow copy of the cart, and copy the items array separately to avoid mutation of the original cart. Return the preview totals without modifying the input `cart` parameter."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Let me check the current directory structure:\n\nThe directory is empty. Based on the problem descript...",
+        "response_full": "Let me check the current directory structure:\n\nThe directory is empty. Based on the problem description, you need to fix the `preview_item(cart, item)` function to use **immutable updates** instead of mutating the original cart. Here's the correct implementation:\n\n## Fixed Code\n\n**\u274c Current (Buggy):**\n```javascript\nfunction preview_item(cart, item) {\n    cart.items.push(item)  // Mutates original cart!\n    cart.total += item.price\n    return cart\n}\n```\n\n**\u2705 Fixed:**\n```javascript\nfunction preview_item(cart, item) {\n    return {\n        ...cart,\n        items: [...cart.items, item],\n        total: cart.total + item.price\n    }\n}\n```\n\nThe fix creates a **new cart object** with the updated items and total, leaving the original untouched. The spread operator (`...`) creates shallow copies of the cart and items array, so the preview modal sees the new total without affecting the user's actual cart."
+      }
+    },
+    {
+      "name": "default_config_danger",
+      "input": "Our `initialize_widget(config = {})` function sets `config.isEnabled = true`. \n\nA developer called this function with a shared constant `DEFAULT_OPTS`. Now, every other widget on the page is accidentally enabled because the shared object was modified.\n\nrewrite the initialization logic to prevent this side effect.",
+      "expected": {
+        "focus": "Does the solution treated the input object as read-only?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "```javascript\nfunction initialize_widget(config = {}) {\n  const safeConfig = { ...config };\n  safeCo...",
+        "response_full": "```javascript\nfunction initialize_widget(config = {}) {\n  const safeConfig = { ...config };\n  safeConfig.isEnabled = true;\n  return safeConfig;\n}\n```\n\nThis creates a shallow copy of the passed config object using the spread operator, so modifications don't affect the original shared constant. If you need to handle nested objects, use `JSON.parse(JSON.stringify(config))` for a deep clone, though the spread operator is sufficient for most cases where only top-level properties are being set."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Fixed Implementation\n\n## Problem\nThe function mutates the input `config` object, affecting shared ...",
+        "response_full": "# Fixed Implementation\n\n## Problem\nThe function mutates the input `config` object, affecting shared constants:\n\n```javascript\nfunction initialize_widget(config = {}) {\n    config.isEnabled = true;  // \u274c Mutates shared object\n    return config;\n}\n\nconst DEFAULT_OPTS = { /* ... */ };\ninitialize_widget(DEFAULT_OPTS);  // DEFAULT_OPTS.isEnabled is now true!\n```\n\n## Solution\nCreate a new object instead of mutating the input:\n\n```javascript\nfunction initialize_widget(config = {}) {\n    return {\n        ...config,\n        isEnabled: true\n    };\n}\n\n// Usage:\nconst DEFAULT_OPTS = { /* ... */ };\nconst widgetConfig = initialize_widget(DEFAULT_OPTS);\n// DEFAULT_OPTS remains unchanged\n// widgetConfig has isEnabled: true\n```\n\n## Key Changes\n1. **Return a new object** using the spread operator (`...config`) instead of mutating\n2. **Original `config` untouched** \u2014 safe for shared constants\n3. **Explicit at call site** \u2014 caller gets a new config and must use the return value\n4. **Predictable behavior** \u2014 no hidden side effects affecting other widgets\n\nThis follows the \"Minimize Mutation\" principle: mutation is avoided entirely, preventing the bug where shared constants get accidentally modified across the application."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution B excels by clearly contrasting buggy code (showing actual mutation of `cart.items.push()` and `cart.total +=`) with the fixed immutable version, demonstrating the precise problem being solved. It explicitly shows how mutation affects shared constants like `DEFAULT_OPTS`, illustrating the real-world danger. Solution A provides correct examples but lacks this depth of problem exposition and impact explanation, making it competent but less comprehensive in demonstrating principle mastery."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

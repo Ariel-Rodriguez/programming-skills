@@ -1,0 +1,61 @@
+{
+  "skill": "ps-explicit-boundaries-adapters",
+  "severity": "WARN",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "discount_logic_isolation",
+      "input": "We have a function `calculate_order_discount(order_id)` that needs to fetch the user's order history to determine the discount tier.\n\nCurrently, it imports `db_client` directly and queries the database inside the calculation logic. This makes it impossible to run simple unit tests on the discount rules without spinning up a test database.\n\nRewrite this feature so that we can verify the discount logic with instant, in-memory unit tests, while still being able to connect to the real database in production.",
+      "expected": {
+        "focus": "Does the solution introduce an interface/abstraction for the data fetching? Is the logic separated from the DB call?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Solution: Dependency Injection for Testability\n\nRefactor `calculate_order_discount()` to accept or...",
+        "response_full": "# Solution: Dependency Injection for Testability\n\nRefactor `calculate_order_discount()` to accept order history as a parameter instead of querying the database internally. This decouples the discount logic from data access.\n\n## Before (Tightly Coupled)\n```python\nfrom db_client import db_client\n\ndef calculate_order_discount(order_id):\n    order_history = db_client.query(\"SELECT * FROM orders WHERE user_id = ?\", order_id)\n    if len(order_history) >= 10:\n        return 0.20\n    elif len(order_history) >= 5:\n        return 0.10\n    return 0.0\n```\n\n## After (Dependency Injected)\n```python\nfrom db_client import db_client\n\ndef calculate_order_discount(order_history):\n    \"\"\"Pure function - no database dependency.\"\"\"\n    if len(order_history) >= 10:\n        return 0.20\n    elif len(order_history) >= 5:\n        return 0.10\n    return 0.0\n\ndef apply_discount_to_order(order_id):\n    \"\"\"Production wrapper that fetches data and applies logic.\"\"\"\n    order_history = db_client.query(\"SELECT * FROM orders WHERE user_id = ?\", order_id)\n    return calculate_order_discount(order_history)\n```\n\n## Unit Tests (No Database Required)\n```python\ndef test_discount_tier_1():\n    assert calculate_order_discount([{}, {}, {}]) == 0.0\n\ndef test_discount_tier_2():\n    assert calculate_order_discount([{}] * 5) == 0.10\n\ndef test_discount_tier_3():\n    assert calculate_order_discount([{}] * 10) == 0.20\n```\n\n## Production Usage\nCall `apply_discount_to_order(order_id)` to get the real database + discount logic.\n\n**Key Benefits:**\n- `calculate_order_discount()` is now a pure function that runs instantly in tests\n- No test database setup needed\n- Production still uses real database via wrapper function\n- Discount rules are easy to verify and maintain"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Refactored Order Discount with Ports & Adapters\n\n## Core Domain: Pure Business Logic\n```python\n# d...",
+        "response_full": "# Refactored Order Discount with Ports & Adapters\n\n## Core Domain: Pure Business Logic\n```python\n# domain/discount.py\nfrom dataclasses import dataclass\nfrom typing import Protocol\n\n@dataclass\nclass OrderHistory:\n    total_spent: float\n    purchase_count: int\n\nclass OrderRepository(Protocol):\n    \"\"\"Port: What discount calculation needs from storage\"\"\"\n    def get_order_history(self, user_id: str) -> OrderHistory:\n        \"\"\"Return domain object, not database model\"\"\"\n        ...\n\ndef calculate_order_discount(user_id: str, repository: OrderRepository) -> float:\n    \"\"\"Core: Zero external dependencies\"\"\"\n    history = repository.get_order_history(user_id)\n    \n    if history.purchase_count >= 10:\n        return 0.20  # 20% discount\n    elif history.total_spent > 1000:\n        return 0.15  # 15% discount\n    elif history.purchase_count >= 5:\n        return 0.10  # 10% discount\n    return 0.0\n```\n\n## Production Adapter: Real Database\n```python\n# adapters/postgres_order_repository.py\nfrom domain.discount import OrderRepository, OrderHistory\n\nclass PostgresOrderRepository(OrderRepository):\n    \"\"\"Adapter: Translates between database and domain\"\"\"\n    def __init__(self, db_client):\n        self.db_client = db_client\n    \n    def get_order_history(self, user_id: str) -> OrderHistory:\n        # Database access stays here\n        result = self.db_client.query(\n            \"SELECT COUNT(*) as count, SUM(amount) as total FROM orders WHERE user_id = %s\",\n            (user_id,)\n        )\n        return OrderHistory(\n            total_spent=result['total'] or 0,\n            purchase_count=result['count']\n        )\n```\n\n## Unit Tests: No Database Needed\n```python\n# tests/test_discount.py\nfrom domain.discount import calculate_order_discount, OrderHistory\n\ndef test_vip_discount_threshold():\n    \"\"\"Instant unit test - no infrastructure\"\"\"\n    class FakeRepository:\n        def get_order_history(self, user_id):\n            return OrderHistory(total_spent=5000, purchase_count=15)\n    \n    discount = calculate_order_discount(\"user123\", FakeRepository())\n    assert discount == 0.20\n\ndef test_loyal_customer_discount():\n    \"\"\"Pure logic verification\"\"\"\n    class FakeRepository:\n        def get_order_history(self, user_id):\n            return OrderHistory(total_spent=500, purchase_count=6)\n    \n    discount = calculate_order_discount(\"user456\", FakeRepository())\n    assert discount == 0.10\n\ndef test_no_discount_for_new_customer():\n    \"\"\"Boundary condition\"\"\"\n    class FakeRepository:\n        def get_order_history(self, user_id):\n            return OrderHistory(total_spent=50, purchase_count=1)\n    \n    discount = calculate_order_discount(\"user789\", FakeRepository())\n    assert discount == 0.0\n```\n\n## Application Startup: Wire Dependencies\n```python\n# main.py\nfrom adapters.postgres_order_repository import PostgresOrderRepository\nfrom domain.discount import calculate_order_discount\n\n# Composition root - only place where concrete adapter is instantiated\ndb_client = connect_to_database()\nrepository = PostgresOrderRepository(db_client)\n\n# Usage\nuser_discount = calculate_order_discount(\"user123\", repository)\n```\n\n## Key Improvements\n\n\u2705 **Testability**: Run 100 discount rule tests in milliseconds, zero database setup  \n\u2705 **Flexibility**: Swap PostgreSQL for MongoDB by creating `MongoOrderRepository` adapter  \n\u2705 **Maintainability**: Discount rules isolated from database changes  \n\u2705 **Dependency Direction**: Domain depends on `OrderRepository` interface, adapter depends on both interface + database library"
+      }
+    },
+    {
+      "name": "infrastructure_pollution_analysis",
+      "input": "Review this code snippet:\n\n```javascript\nclass InvoiceService {\n  process(invoice) {\n    if (invoice.amount > 10000) {\n      const sns = new AWS.SNS(); // Direct AWS usage\n      sns.publish({ topic: 'high-value-tx', message: JSON.stringify(invoice) });\n    }\n    // ... rest of logic\n  }\n}\n```\n\nWhat are the long-term maintainability problems with instantiation like this inside business logic?",
+      "expected": {
+        "focus": "Does the answer mention vendor lock-in, testing difficulties, or mixing concerns?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "## Long-Term Maintainability Problems\n\nThis instantiation pattern creates several critical issues:\n\n...",
+        "response_full": "## Long-Term Maintainability Problems\n\nThis instantiation pattern creates several critical issues:\n\n1. **Tight Coupling & Testability Nightmare**: InvoiceService is locked into AWS.SNS. Unit tests can't run without hitting AWS infrastructure or complex global mocks. Every test becomes an integration test, making tests slow and brittle.\n\n2. **Resource Waste**: A new SNS client is instantiated on every high-value transaction. Clients should be reused; this creates connection overhead and wastes memory.\n\n3. **Hidden Dependencies**: The SNS dependency isn't declared in the constructor or method signature. New developers don't see what InvoiceService actually depends on until reading the implementation details.\n\n4. **Violation of Single Responsibility**: InvoiceService now handles both invoice processing AND AWS notification logic. Changing notification behavior requires modifying this class.\n\n5. **Impossible to Swap Implementations**: Want to use SQS, Kafka, or a webhook instead? You must modify InvoiceService directly. No way to support multiple notification strategies without branching logic.\n\n6. **Dependency Inversion Violation**: The class depends on a concrete AWS implementation rather than an abstraction, making it rigid and hard to extend.\n\n**Fix**: Inject the messaging service as a dependency (constructor or method parameter), depend on an abstraction (interface/contract), and let the caller decide the implementation. This decouples business logic from infrastructure concerns, enables easy testing with mocks, and allows runtime swapping of notification mechanisms."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Long-term Maintainability Problems\n\nThis code violates the ports & adapters principle by tightly c...",
+        "response_full": "# Long-term Maintainability Problems\n\nThis code violates the ports & adapters principle by tightly coupling business logic to AWS infrastructure. The long-term problems are:\n\n1. **Testability collapse**: `InvoiceService.process()` cannot be unit tested without AWS credentials, network access, and real SNS topics. Every test becomes an integration test requiring infrastructure setup.\n\n2. **Infrastructure lock-in**: Switching from SNS to SQS, email, Kafka, or any other notification system requires modifying `InvoiceService` itself. The business logic becomes a prisoner of the chosen infrastructure.\n\n3. **Configuration hell**: AWS credentials and topic names are hardcoded or rely on implicit environment configuration scattered across the codebase. Environment-specific setup becomes fragile.\n\n4. **Violation of dependency rule**: Business logic should never import external frameworks. Changes to AWS SDK APIs, authentication mechanisms, or library versions cascade directly into domain code.\n\n5. **Hidden side effects**: The `process()` method's contract is unclear\u2014callers don't know it triggers network I/O. Adding notification logic later (email, Slack, webhooks) requires modifying this same service repeatedly.\n\n**Solution**: Extract a `NotificationPort` interface (e.g., `notify(subject, message)`), implement it with an `AwsSnsAdapter`, and inject it into `InvoiceService`. Now the service is testable with mocks, swappable between notification systems, and isolated from AWS SDK changes."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution A demonstrates dependency injection and pure functions but fails to implement the ports & adapters pattern\u2014the `db_client` import remains in production code in the wrapper function, and there is no port interface or adapter layer. Solution B fully implements the pattern with a proper `OrderRepository` port interface, `PostgresOrderRepository` adapter handling database translation, and pure domain logic with zero framework imports, enabling true infrastructure independence and instant zero-setup unit testing."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

@@ -1,16 +1,16 @@
 [
     {
-        "name": "transform_invalid_state",
-        "input": "transform_invalid_state.ts",
+        "name": "email_verification_bug",
+        "spec": "We have a `User` record with an `email` field (string, optional) and an `email_verified` field (boolean).\n\nA bug recently caused the system to send \"Password Reset\" emails to `null` because `email_verified` was true but `email` was missing.\n\nChange the data model so that it is structurally impossible to have a \"verified\" status without an associated email address.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution link the verification status directly to the email field (e.g., a VerifiedEmail type)? "
         }
     },
     {
-        "name": "explain_parse_dont_validate",
-        "input": "Explain the difference between 'validating data' and 'parsing data into domain types' in the context of making illegal states unrepresentable.",
+        "name": "parser_vs_validator",
+        "spec": "We accept a 'phone number' string from an API. We validate it with regex, but then we continue to pass it around as a raw string.\n\nLater in the pipeline, another function has to re-validate it because it doesn't trust the string. This happens 5 times across the codebase.\n\nShow how to fix this redundancy. We want to validate once and then *know* for sure that the data is valid for the rest of the flow.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution parse the string into a specific 'PhoneNumber' type/object once, rather than validating ad-hoc?"
         }
     }
 ]

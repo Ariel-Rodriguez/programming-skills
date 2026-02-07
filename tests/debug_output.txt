@@ -1,0 +1,21 @@
+Loading tests from: C:\Users\Ariel\Documents\projects\basic-programming-skills\skills\ps-composition-over-coordination
+
+Found 2 tests:
+
+--- Test: refactor_orchestrator_class ---
+Input Prompt Length: 2453
+Start of prompt (repr):
+'Refactor the following code into small composable units, avoiding a central coordinator. You MUST provide the complete refactored code in a javascript code block:\n\n\n```js\n/**\n * PaymentOrchestrator - '
+End of prompt (repr):
+'mailService.send(session.email, "Payment Successful", `You charged $${request.amount}`);\n\n        return {\n            success: true,\n            transactionId: transaction.id\n        };\n    }\n}\n\n```\n'
+
+[SUCCESS] 'class PaymentProcessor' found.
+
+--- Test: identify_coordination_bottleneck ---
+Input Prompt Length: 145
+Start of prompt (repr):
+"Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck. Mention design principles."
+End of prompt (repr):
+"Explain why a 'Manager' class that contains all the logic for three different subsystems is a coordination bottleneck. Mention design principles."
+
+[FAIL] 'class PaymentProcessor' NOT found.

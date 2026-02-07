@@ -1,0 +1,61 @@
+{
+  "skill": "ps-illegal-states-unrepresentable",
+  "severity": "SUGGEST",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "email_verification_bug",
+      "input": "We have a `User` record with an `email` field (string, optional) and an `email_verified` field (boolean).\n\nA bug recently caused the system to send \"Password Reset\" emails to `null` because `email_verified` was true but `email` was missing.\n\nChange the data model so that it is structurally impossible to have a \"verified\" status without an associated email address.",
+      "expected": {
+        "focus": "Does the solution link the verification status directly to the email field (e.g., a VerifiedEmail type)? "
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Solution: Union the `email` and `email_verified` Fields\n\nReplace the two separate fields with a si...",
+        "response_full": "# Solution: Union the `email` and `email_verified` Fields\n\nReplace the two separate fields with a single `verified_email` field:\n\n**Before:**\n```\nemail: string | null\nemail_verified: boolean\n```\n\n**After:**\n```\nverified_email: string | null\n```\n\nThis change makes it **structurally impossible** to have a verified email without an actual email address:\n- `verified_email: null` \u2192 no email provided\n- `verified_email: \"user@example.com\"` \u2192 email exists and is verified\n- There is no way to set `verified_email: true` without a string value\n\n**Implementation:**\n- If you need to track unverified emails, add a separate `unverified_email: string | null` field\n- Migrations: set `verified_email` to the current `email` value only where `email_verified` was true; all other records get `null`\n- Remove the old `email` and `email_verified` fields after migration\n\nThis prevents the bug at the type/schema level rather than relying on application logic."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "The directory appears to be empty. Let me check the current working directory:\n\nThe temporary direct...",
+        "response_full": "The directory appears to be empty. Let me check the current working directory:\n\nThe temporary directory is empty. Let me check if there are any files in the current directory:\n\nSince there are no files provided in the workspace, I'll provide the direct answer based on the skill guidance and the bug description:\n\n## Fix for Email Verification Bug\n\n**The Problem:**\nThe current design allows `email_verified = true` with `email = null`, causing the system to send emails to null addresses.\n\n**Current Structure (Bad):**\n```typescript\ntype User = {\n  email: string | null;\n  email_verified: boolean;\n}\n```\n\n**Fixed Structure (Good):**\n```typescript\ntype User = {\n  email: EmailStatus;\n}\n\ntype EmailStatus = \n  | { status: 'unverified'; email: string }\n  | { status: 'verified'; email: string }\n  | { status: 'no_email' };\n```\n\n**Alternative (More Idiomatic):**\n```typescript\ntype User = {\n  email: EmailAddress | null;\n}\n\ntype EmailAddress = {\n  address: string;\n  verified: true;\n} | {\n  address: string;\n  verified: false;\n}\n```\n\n**Key Changes:**\n1. Remove the boolean `email_verified` flag\n2. Use a discriminated union to represent mutually exclusive email states\n3. The type system now prevents `verified: true` without an email address\n4. The type system prevents null email with verified status\n\n**Why This Works:**\n- **Illegal state becomes impossible**: You cannot construct a verified email state without an actual email address\n- **Type-safe**: TypeScript/compiler catches any attempt to access email on a verified status\n- **Eliminates runtime checks**: No need for defensive validations like `if (email_verified && !email)`\n- **Self-documenting**: The type declaration shows all valid email states explicitly"
+      }
+    },
+    {
+      "name": "parser_vs_validator",
+      "input": "We accept a 'phone number' string from an API. We validate it with regex, but then we continue to pass it around as a raw string.\n\nLater in the pipeline, another function has to re-validate it because it doesn't trust the string. This happens 5 times across the codebase.\n\nShow how to fix this redundancy. We want to validate once and then *know* for sure that the data is valid for the rest of the flow.",
+      "expected": {
+        "focus": "Does the solution parse the string into a specific 'PhoneNumber' type/object once, rather than validating ad-hoc?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Use a Branded Type (or Newtype Pattern)\n\nCreate a type wrapper that represents a *validated* phone...",
+        "response_full": "# Use a Branded Type (or Newtype Pattern)\n\nCreate a type wrapper that represents a *validated* phone number. Only the validation function can construct it, and functions throughout your codebase accept this type instead of raw strings.\n\n## Solution\n\n```typescript\n// Create a branded type that only validation can create\ntype ValidatedPhoneNumber = string & { readonly __brand: \"ValidatedPhoneNumber\" };\n\nfunction validatePhoneNumber(input: string): ValidatedPhoneNumber | null {\n  const phoneRegex = /^\\+?1?\\d{9,15}$/;\n  if (!phoneRegex.test(input)) {\n    return null;\n  }\n  return input as ValidatedPhoneNumber;\n}\n\n// Now functions require the branded type - no re-validation needed\nfunction sendSMS(phone: ValidatedPhoneNumber): void {\n  // phone is guaranteed to be valid\n  console.log(`Sending SMS to ${phone}`);\n}\n\nfunction storeInDatabase(phone: ValidatedPhoneNumber): void {\n  // phone is guaranteed to be valid\n  console.log(`Storing ${phone} in database`);\n}\n\nfunction logPhoneEvent(phone: ValidatedPhoneNumber): void {\n  // phone is guaranteed to be valid\n  console.log(`Logged ${phone}`);\n}\n\n// Usage - validation happens once at the entry point\nconst userInput = \"+1234567890\";\nconst validPhone = validatePhoneNumber(userInput);\n\nif (validPhone) {\n  sendSMS(validPhone);        // \u2713 No re-validation\n  storeInDatabase(validPhone); // \u2713 No re-validation\n  logPhoneEvent(validPhone);   // \u2713 No re-validation\n} else {\n  console.error(\"Invalid phone number\");\n}\n```\n\n## Why This Works\n\n1. **Single validation point** - Phone is validated once when the branded type is created\n2. **Compiler enforcement** - Raw strings are rejected by type system; only `ValidatedPhoneNumber` is accepted\n3. **Zero runtime overhead** - The branded type is just a TypeScript type annotation; it's erased at runtime\n4. **Self-documenting** - Developers see `ValidatedPhoneNumber` and instantly know it's been validated\n\nThis pattern is called \"**making invalid states unrepresentable**\" \u2014 once the type exists, all downstream code is guaranteed to receive valid data without redundant re-validation."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Solution: Parse Phone Number Once at the Boundary\n\n**The Problem:** Raw string passed around, vali...",
+        "response_full": "# Solution: Parse Phone Number Once at the Boundary\n\n**The Problem:** Raw string passed around, validated 5 times defensively.\n\n**The Fix:** Create a `PhoneNumber` type. Validate at the API boundary. Internal code uses only the validated type.\n\n```typescript\n// \u274c BEFORE: Validate everywhere (fragile)\nfunction processPayment(phoneNumber: string) {\n  if (!validatePhone(phoneNumber)) throw Error(\"Invalid\");\n  // ...\n}\n\nfunction sendNotification(phoneNumber: string) {\n  if (!validatePhone(phoneNumber)) throw Error(\"Invalid\");\n  // ...\n}\n\nfunction updateContact(phoneNumber: string) {\n  if (!validatePhone(phoneNumber)) throw Error(\"Invalid\");\n  // ...\n}\n// Validation scattered across 5+ places\n```\n\n---\n\n```typescript\n// \u2705 AFTER: Validate once, use guaranteed-valid type everywhere\n\n// Domain type - only valid phone numbers can exist\ntype PhoneNumber = string & { readonly __brand: \"PhoneNumber\" };\n\n// Parse at boundary (single point of validation)\nfunction parsePhoneNumber(input: string): PhoneNumber | Error {\n  const phoneRegex = /^\\+?[1-9]\\d{1,14}$/;\n  if (!phoneRegex.test(input)) {\n    return Error(`Invalid phone number: ${input}`);\n  }\n  return input as PhoneNumber;\n}\n\n// Internal functions accept ONLY validated PhoneNumber type\nfunction processPayment(phoneNumber: PhoneNumber) {\n  // No validation needed - type guarantees it's valid\n  chargeCard(phoneNumber);\n}\n\nfunction sendNotification(phoneNumber: PhoneNumber) {\n  sms.send(phoneNumber);\n}\n\nfunction updateContact(phoneNumber: PhoneNumber) {\n  db.update(phoneNumber);\n}\n\n// At API boundary: parse once, convert to domain type\napp.post(\"/charge\", (req) => {\n  const result = parsePhoneNumber(req.body.phone);\n  \n  if (result instanceof Error) {\n    return res.status(400).json({ error: result.message });\n  }\n  \n  // result is now PhoneNumber - type is guaranteed valid\n  processPayment(result);\n  sendNotification(result);\n  updateContact(result);\n  // No re-validation needed - compiler enforces it\n});\n```\n\n**Result:**\n- \u2705 Validation happens once at the boundary\n- \u2705 Type system guarantees validity for the entire pipeline\n- \u2705 No defensive checks scattered in 5 places\n- \u2705 Impossible to pass invalid phone number to internal functions\n- \u2705 Refactoring is safe\u2014compiler catches mistakes"
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A uses a single nullable field approach for email verification, which is an improvement but leaves room for invalid combinations when adding `unverified_email` separately. Solution B uses discriminated unions to make email states mutually exclusive\u2014the textbook pattern for this principle. While both solutions apply the branded type pattern effectively for phone validation, Solution B's consistent use of discriminated unions throughout demonstrates superior principle adherence and creates genuinely unrepresentable illegal states rather than merely reducing them."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

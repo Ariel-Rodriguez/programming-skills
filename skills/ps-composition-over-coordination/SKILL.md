@@ -2,6 +2,7 @@
 name: ps-composition-over-coordination
 description: Build complexity by composing simple units, not orchestrating flows. Use when reviewing large functions or god objects.
 severity: SUGGEST
+version: 1.0.0
 ---
 
 # Composition Over Coordination

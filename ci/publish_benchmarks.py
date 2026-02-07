@@ -7,9 +7,11 @@ Coordinates all steps: run evaluation, generate data, create HTML, push to orpha
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+import tempfile
 
 
 def run_benchmark(provider: str, model: str, skill: str | None = None) -> bool:
@@ -44,7 +46,7 @@ def run_benchmark(provider: str, model: str, skill: str | None = None) -> bool:
     return result.returncode == 0
 
 
-def collect_and_generate(benchmarks_dir: Path, output_dir: Path) -> bool:
+def collect_and_generate(history_dir: Path, output_dir: Path) -> bool:
     """
     Collect benchmark data and generate HTML.
 
@@ -56,18 +58,9 @@ def collect_and_generate(benchmarks_dir: Path, output_dir: Path) -> bool:
         True if successful, False otherwise
     """
     from generate_dashboard_data import generate_dashboard_data
-    from generate_basic_html import generate_basic_html
-
-    # Generate aggregated JSON
-    data_file = output_dir / "benchmarks.json"
-    if not generate_dashboard_data(benchmarks_dir, data_file):
+    # Generate aggregated JSON and per-run data.json files
+    if not generate_dashboard_data(history_dir, output_dir):
         print("Error generating dashboard data")
-        return False
-
-    # Generate HTML
-    html_file = output_dir / "index.html"
-    if not generate_basic_html(data_file, html_file):
-        print("Error generating HTML")
         return False
 
     return True
@@ -93,37 +86,69 @@ def push_to_orphan_branch(repo_path: Path, docs_dir: Path, branch_name: str) -> 
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Publish benchmark results")
-    parser.add_argument("--provider", required=True, help="Provider name")
-    parser.add_argument("--model", required=True, help="Model name")
+    parser.add_argument("--provider", help="Provider name")
+    parser.add_argument("--model", help="Model name")
     parser.add_argument("--skill", help="Optional specific skill to test")
     parser.add_argument("--branch", default="benchmark-history", help="Orphan branch name")
     parser.add_argument("--no-benchmark", action="store_true", help="Skip benchmark run")
     parser.add_argument("--no-push", action="store_true", help="Skip pushing to orphan branch")
+    parser.add_argument("--benchmarks-dir", help="Deprecated (unused)")
+    parser.add_argument("--history-dir", help="Directory containing per-skill history (default: tests/data-history)")
+    parser.add_argument("--output-dir", help="Directory to write generated files")
 
     args = parser.parse_args()
 
     repo_path = Path(__file__).parent.parent
-    benchmarks_dir = repo_path / "tests" / "results"
-    docs_dir = repo_path / "docs"
+    if args.benchmarks_dir:
+        print("Warning: --benchmarks-dir is deprecated and ignored.")
+
+    history_dir = Path(args.history_dir) if args.history_dir else repo_path / "tests" / "data-history"
+    output_dir = Path(args.output_dir) if args.output_dir else repo_path / "site" / "benchmarks"
+
+    # Ensure docs directory exists (may not exist if no docs yet)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Run benchmark if requested
     if not args.no_benchmark:
+        if not args.provider or not args.model:
+            print("Error: --provider and --model are required unless --no-benchmark is set")
+            return 1
         if not run_benchmark(args.provider, args.model, args.skill):
             print("Benchmark run failed")
             return 1
     else:
         print("Skipping benchmark run")
 
-    # Step 2: Generate dashboard data and HTML
+    # Step 2: Ensure history directory exists
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    # Step 4: Sync static site assets into output directory
+    source_dir = repo_path / "src" / "pages" / "benchmarks"
+    if not source_dir.exists():
+        print(f"Static site source not found at {source_dir}")
+        return 1
+
+    for item in source_dir.iterdir():
+        dest = output_dir / item.name
+        if item.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)
+
+    # Step 5: Generate dashboard data files
     print("\nGenerating dashboard data...")
-    if not collect_and_generate(benchmarks_dir, docs_dir):
+    if not collect_and_generate(history_dir, output_dir):
         print("Dashboard generation failed")
         return 1
 
-    # Step 3: Push to orphan branch if requested
+    # Step 6: Push to orphan branch if requested
     if not args.no_push:
         print("\nPushing to orphan branch...")
-        if not push_to_orphan_branch(repo_path, docs_dir, args.branch):
+        temp_dir = Path(tempfile.mkdtemp(prefix="benchmarks-site-"))
+        shutil.copytree(output_dir, temp_dir, dirs_exist_ok=True)
+        if not push_to_orphan_branch(repo_path, temp_dir, args.branch):
             print("Push to orphan branch failed")
             return 1
     else:

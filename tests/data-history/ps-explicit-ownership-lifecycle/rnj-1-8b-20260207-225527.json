@@ -1,0 +1,60 @@
+{
+  "skill": "ps-explicit-ownership-lifecycle",
+  "severity": "WARN",
+  "model": "rnj-1:8b",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "resource_cleanup_guarantee",
+      "input": "A function `process_large_file(path)` opens a file handle to read data. If a parsing error occurs halfway through, the function throws an exception. We've noticed that this leaves the file handle open, eventually causing an \"Too many open files\" error on the server.\n\nFix the code structure so that the file is *always* closed, whether the function succeeds, fails, or crashes.",
+      "expected": {
+        "focus": "Does the solution use a try/finally block, a 'using' statement, or a RAII pattern to guarantee cleanup?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To ensure that the file is always closed, regardless of whether the function succeeds, fails, or cra...",
+        "response_full": "To ensure that the file is always closed, regardless of whether the function succeeds, fails, or crashes, you can use a `with` statement. This ensures that the file is properly closed after the block of code is executed, even if an exception occurs.\n\nHere's the corrected code:\n\n```python\ndef process_large_file(path):\n    try:\n        with open(path, 'r') as file:\n            # Process the file here\n            # If a parsing error occurs halfway through, this will raise an exception\n            # The file will be closed automatically when exiting the 'with' block\n            # You can add your processing logic here\n            pass\n    except Exception as e:\n        # Handle the exception if needed\n        print(f\"An error occurred: {e}\")\n```\n\nIn this code:\n- The `with` statement is used to open the file. This ensures that the file is closed after the block of code is executed, even if an exception occurs.\n- The `try` block contains the code that processes the file. If an exception occurs, it will be caught in the `except` block.\n- The `except` block can be used to handle the exception if needed."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "```python\ndef process_large_file(path):\n    \"\"\"\n    Process a large file by reading its contents and...",
+        "response_full": "```python\ndef process_large_file(path):\n    \"\"\"\n    Process a large file by reading its contents and handling potential errors.\n    \n    Args:\n        path (str): Path to the file to be processed.\n    \n    Returns:\n        None\n    \"\"\"\n    with open(path, 'r') as file:\n        try:\n            # Process the file contents\n            data = file.read()\n            # Simulate potential error during processing\n            # raise ValueError(\"Simulated error during processing\")\n            # Process data here\n            print(\"Processing complete.\")\n        except Exception as e:\n            print(f\"Error occurred: {e}\")\n        finally:\n            # The 'with' statement ensures the file is closed automatically\n            print(\"File has been closed.\")\n```"
+      }
+    },
+    {
+      "name": "event_subscription_leak",
+      "input": "In our Single Page Application, when a user navigates to the 'Dashboard', the component subscribes to a global WebSocket stream. When they navigate away, the connection seems to stay open, and if they come back, a second connection is opened. This leads to duplicate data and memory leaks.\n\nimplment a pattern for the Dashboard component that ensures the subscription is strictly tied to the component's lifetime.",
+      "expected": {
+        "focus": "Does the solution explicitly pair the subscription creation with its destruction (e.g., onMount/onUnmount)?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To ensure that the WebSocket connection is strictly tied to the component's lifetime, you can use th...",
+        "response_full": "To ensure that the WebSocket connection is strictly tied to the component's lifetime, you can use the lifecycle hooks provided by Angular (or the framework you are using) to manage the WebSocket connection. Here is a general approach you can follow:\n\n1. **Establish the WebSocket connection when the component is initialized.**\n2. **Close the WebSocket connection when the component is destroyed.**\n\nHere's a pseudo-code example in Angular:\n\n```typescript\nimport { Component, OnDestroy, OnInit } from '@angular/core';\n\n@Component({\n  selector: 'app-dashboard',\n  templateUrl: './dashboard.component.html',\n  styleUrls: ['./dashboard.component.css']\n})\nexport class DashboardComponent implements OnInit, OnDestroy {\n  private webSocket: WebSocket;\n\n  ngOnInit() {\n    // Initialize WebSocket connection\n    this.webSocket = new WebSocket('wss://your-websocket-url');\n\n    this.webSocket.onopen = () => {\n      console.log('WebSocket connection opened');\n    };\n\n    this.webSocket.onmessage = (event) => {\n      console.log('Message from server:', event.data);\n    };\n\n    this.webSocket.onclose = () => {\n      console.log('WebSocket connection closed');\n    };\n  }\n\n  ngOnDestroy() {\n    // Close WebSocket connection when component is destroyed\n    if (this.webSocket) {\n      this.webSocket.close();\n    }\n  }\n}\n```\n\n### Explanation:\n- **`ngOnInit`**: This lifecycle hook is called when the component is initialized. Here, you establish the WebSocket connection.\n- **`ngOnDestroy`**: This lifecycle hook is called when the component is destroyed. Here, you close the WebSocket connection to ensure no resources are left open.\n\nBy following this pattern, you ensure that the WebSocket connection is strictly tied to the component's lifetime, preventing duplicate connections and memory leaks."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "```typescript\nimport { useEffect, useRef } from 'react';\nimport { WebSocketService } from './WebSock...",
+        "response_full": "```typescript\nimport { useEffect, useRef } from 'react';\nimport { WebSocketService } from './WebSocketService';\n\nexport function Dashboard() {\n  const wsRef = useRef<WebSocket | null>(null);\n\n  useEffect(() => {\n    // Create WebSocket connection when component mounts\n    wsRef.current = WebSocketService.connect();\n\n    // Cleanup function - called when component unmounts\n    return () => {\n      if (wsRef.current) {\n        WebSocketService.disconnect(wsRef.current);\n        wsRef.current = null;\n      }\n    };\n  }, []);\n\n  // Rest of Dashboard component code\n  return (\n    <div>\n      <h1>Dashboard</h1>\n      {/* Dashboard content */}\n    </div>\n  );\n}\n```\n\nThis implementation ensures that:\n1. The WebSocket connection is created when the Dashboard component mounts\n2. The WebSocket connection is properly cleaned up when the Dashboard component unmounts\n3. There is no duplicate connection if the user navigates away and comes back\n\nThe key pattern here is using React's `useEffect` with a cleanup function (the return statement) to ensure proper resource management. This follows the Explicit Ownership Lifecycle principle from the skill guidance, where the component is the single owner of the WebSocket connection, and it is responsible for creating and cleaning up the resource."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B demonstrates a stronger adherence to the principle of explicit ownership and lifecycle management. It properly encapsulates the WebSocket connection within the component lifecycle, ensuring that the connection is created when the component mounts and properly cleaned up when it unmounts. This follows the principle of having a single owner responsible for the resource. Solution A also follows the principle but is more basic, lacking the explicit lifecycle management that Solution B provides. Solution B is more maintainable and flexible, as it clearly defines the component's responsibility for managing the WebSocket connection, making it easier to reason about and test."
+  },
+  "timestamp": "2026-02-07T22:55:27",
+  "provider": "ollama"
+}

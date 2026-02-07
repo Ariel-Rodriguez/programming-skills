@@ -16,19 +16,17 @@ Manual trigger via GitHub Actions workflow dispatch with inputs:
 Manual GitHub Actions Trigger
   inputs: provider (choice), model (string)
     ↓
-Run evaluation for provider/model → artifact/
+Run evaluation for provider/model → tests/data-history/summary-<provider>-<model>-<timestamp>.json
     ↓
-Download artifacts
+Write tests/data-history/<skill>/<model>-<timestamp>.json
     ↓
 Generate dashboard data (pure function)
     ↓
-Save to docs/benchmarks/{timestamp}.json
+Copy src/pages/benchmarks → output root (default: site/benchmarks)
     ↓
-Push docs/ to benchmark-history orphan branch
+Write benchmarks.json + data/{benchmark_id}/data.json
     ↓
-Generate basic index.html
-    ↓
-Commit & push index.html to orphan branch
+Push output root to benchmark-history orphan branch
     ↓
 GitHub Pages serves benchmark-history branch
 ```
@@ -36,14 +34,26 @@ GitHub Pages serves benchmark-history branch
 ## Folder Structure
 
 ```
-docs/
-├── specs/
-│   ├── benchmark-workflow.md     # This file
-│   └── benchmark-page.md         # Page design spec (separate spec)
-├── benchmarks/                   # Generated data (auto-created)
-│   ├── {timestamp}.json          # Individual benchmark results
-│   └── index.html                # Dashboard page
-└── benchmarks.json               # Aggregated data for quick access
+src/
+└── pages/
+    └── benchmarks/               # Source dashboard UI
+        ├── index.html
+        ├── app.js
+        └── data/                 # Optional dev data
+
+site/
+└── benchmarks/                   # Generated output (auto-created)
+    ├── index.html                # Copied from src/pages/benchmarks
+    ├── app.js                    # Copied from src/pages/benchmarks
+    ├── benchmarks.json           # Aggregated data for JS
+    └── data/
+        └── {benchmark_id}/
+            └── data.json          # Per-run data for dashboard
+
+tests/
+└── data-history/
+    └── <skill>/
+        └── <model>-<timestamp>.json
 ```
 
 ## Files
@@ -61,7 +71,7 @@ GitHub Actions workflow that:
 Main orchestration script:
 - Coordinates all steps
 - Handles errors gracefully
-- Writes to docs/benchmarks/
+- Writes to site/benchmarks/
 
 ### `ci/orphan_branch_manager.py`
 
@@ -77,12 +87,10 @@ Pure function that:
 - Extracts structured data for dashboard
 - Returns consistent format
 
-### `ci/generate_basic_html.py`
+### Static HTML/JS Source
 
-Pure function that:
-- Takes structured data
-- Generates Bootstrap-styled HTML
-- Outputs index.html
+- Static HTML/JS is sourced from `src/pages/benchmarks/`.
+- Publish step copies it into the output root before writing JSON data.
 
 ## Output Format
 
@@ -122,5 +130,5 @@ Bootstrap 5 + minimal JS
 ## Orphan Branch: benchmark-history
 
 - Single branch for all benchmark data
-- Contains: docs/benchmarks/ + docs/benchmarks.json
+- Contains: site/benchmarks/ (flat root for GitHub Pages)
 - GitHub Pages serves this branch directly

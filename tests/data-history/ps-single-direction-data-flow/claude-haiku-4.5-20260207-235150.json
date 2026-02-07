@@ -1,0 +1,61 @@
+{
+  "skill": "ps-single-direction-data-flow",
+  "severity": "BLOCK",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "fix_infinite_loop",
+      "input": "We have a bug where the `ProfileEditor` component updates the `UserStore`, which triggers an event that causes `ProfileEditor` to re-render, which triggers another update... crashing the browser.\n\nDescribe the structural flaw that allows this loop to happen, and propose a data flow pattern that prevents it by design.",
+      "expected": {
+        "focus": "Does the solution propose a unidirectional flow (Action -> Dispatcher -> Store -> View)?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "Let me check the directory structure:\n\nThe directory appears to be empty. Let me search for files in...",
+        "response_full": "Let me check the directory structure:\n\nThe directory appears to be empty. Let me search for files in the current working directory or check if there's code elsewhere:\n\nThe directory is empty, so I'll provide the answer based on the architectural problem described:\n\n## Structural Flaw\n\nThe bug occurs due to **bidirectional reactivity without update isolation**:\n\n1. **ProfileEditor renders** and reads state from UserStore\n2. **User makes changes** \u2192 ProfileEditor calls `updateUserStore()`\n3. **UserStore updates** and emits an event\n4. **Event listener in ProfileEditor** triggers (same component that initiated the change)\n5. **ProfileEditor re-renders** with new data from UserStore\n6. **Re-render triggers change detection** \u2192 step 2 repeats\n\nThe flaw is that the **component that updates the store is also listening to the store's change events**. This creates a closed feedback loop where the initiator of the change becomes the victim of its own side effects.\n\n## Preventing Pattern: Optimistic Updates + Transactional Writes\n\n**Solution: Separate read and write concerns with a transactional boundary**\n\n```\nProfileEditor (UI Component)\n    \u2193\n    Local State (optimistic)\n    \u2193\nupdateProfile() {\n  1. Update local state immediately (optimistic)\n  2. Call store.updateProfile() with a transaction ID\n  3. Subscribe ONLY to external updates (different source)\n}\n\nUserStore\n    \u2193\nupdateProfile(data, txnId) {\n  1. Apply update\n  2. Emit event WITH transaction ID\n}\n\nProfileEditor listener:\n  onStoreChange(event) {\n    if (event.txnId !== lastTxnId) {  // Reject own changes\n      syncFromStore()\n    }\n  }\n```\n\n**Key principle**: The component that initiates a write should **not re-render from that same write**\u2014only from external changes. This breaks the loop by introducing a transactional boundary that distinguishes self-caused updates (ignored) from external updates (applied)."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "## Structural Flaw: Circular Feedback Loop\n\nThe bug violates the \"Single Direction of Data Flow\" pri...",
+        "response_full": "## Structural Flaw: Circular Feedback Loop\n\nThe bug violates the \"Single Direction of Data Flow\" principle through a **bidirectional cycle**:\n\n```\nProfileEditor \u2192 writes to \u2192 UserStore\n                                 \u2193\n                          emits change event\n                                 \u2193\nProfileEditor \u2190 re-renders \u2190 UserStore\n    \u2193\n  triggers update logic in render\n    \u2193\n  writes to UserStore again\n    \u2193\n[LOOP REPEATS]\n```\n\n**Root causes:**\n1. **No clear ownership**: Both ProfileEditor and UserStore can write to the same state\n2. **Backchannel feedback**: UserStore notifies ProfileEditor, which automatically triggers another write\n3. **Re-render side effects**: ProfileEditor's render method contains update logic instead of just display logic\n\nThis violates the core principle: \"Each piece of data has exactly one owner\" and \"Only the owner may change it.\"\n\n## Solution: Unidirectional Data Flow\n\n**Pattern: Parent owns state, child emits events**\n\n```\nUserStore [OWNER]\n    \u2193 (props down)\nProfileEditor (receives: userData, onSave)\n    \u2193 (event up)\n    onSave(updatedData)\n    \u2193\nUserStore.updateUser() \n    \u2193 (notifies subscribers)\nProfileEditor re-renders with new props\n    \u2713 Render is pure\u2014no side effects, no writes\n```\n\n**Key enforcement:**\n- **UserStore alone** owns and writes user data\n- **ProfileEditor receives** data via props, has **no write access**\n- **ProfileEditor emits events** (onSave, onChange) when user acts\n- **UserStore handles** all events and state updates\n- **Render logic is side-effect free**: ProfileEditor only transforms props \u2192 UI\n\n**Result**: UserStore change \u2192 ProfileEditor gets new props \u2192 re-renders with new data \u2192 no automatic write triggered. The loop is broken by design."
+      }
+    },
+    {
+      "name": "state_sync_nightmare",
+      "input": "Component A (Parent) has `isOpen` state. Component B (Child) also has a local copy of `isOpen` state. They try to keep each other in sync using `useEffect` and callbacks.\n\nThis is causing race conditions where the child is open but the parent thinks it's closed.\n\nRewrite the relationship between these components so there is only *one* source of truth.",
+      "expected": {
+        "focus": "Does the child become a controlled component (props only)?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Solution: Lift State to Parent\n\n**Keep state in the parent only.** Remove the child's local `isOpe...",
+        "response_full": "# Solution: Lift State to Parent\n\n**Keep state in the parent only.** Remove the child's local `isOpen` state entirely.\n\n## Parent Component\n```jsx\nconst [isOpen, setIsOpen] = useState(false);\n\nreturn <ChildComponent isOpen={isOpen} onToggle={setIsOpen} />;\n```\n\n## Child Component\n```jsx\nfunction ChildComponent({ isOpen, onToggle }) {\n  return (\n    <>\n      <button onClick={() => onToggle(!isOpen)}>Toggle</button>\n      {isOpen && <div>Content</div>}\n    </>\n  );\n}\n```\n\n**Why this works:**\n- Single source of truth (parent state)\n- No `useEffect` race conditions needed\n- Child reads from props, triggers callbacks to parent\n- Parent updates state, re-renders child with new prop value\n- Guaranteed synchronization\n\n**If the child needs to close itself independently:** Pass `onClose` callback and call it from the child.\n\n**If multiple children need to share this state:** Keep state in parent, pass it to all children via props and callbacks.\n\nThis eliminates the dual-state synchronization problem entirely."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Solution: Parent Owns State, Child Receives It\n\nRemove the child's local `isOpen` state. The paren...",
+        "response_full": "# Solution: Parent Owns State, Child Receives It\n\nRemove the child's local `isOpen` state. The parent owns `isOpen` and the child receives it as a prop.\n\n```javascript\n// PARENT - owns isOpen state\nfunction ComponentA() {\n    const [isOpen, setIsOpen] = useState(false);\n\n    return (\n        <ComponentB \n            isOpen={isOpen}\n            onToggle={(newValue) => setIsOpen(newValue)}\n        />\n    );\n}\n\n// CHILD - receives state, emits events only\nfunction ComponentB({ isOpen, onToggle }) {\n    return (\n        <button onClick={() => onToggle(!isOpen)}>\n            {isOpen ? 'Close' : 'Open'}\n        </button>\n    );\n}\n```\n\n**What changed:**\n- **Parent**: Owns `isOpen`. Single source of truth.\n- **Child**: Removed local `isOpen` state. Receives it as a prop.\n- **Updates**: Parent responds to `onToggle` event and updates `isOpen`. Child re-renders with new prop value.\n- **Data flow**: `isOpen` flows down (parent \u2192 child). Events flow up (child \u2192 parent).\n\n**Why this fixes the race condition:**\n- No duplicate state to sync\n- No competing writes\n- No `useEffect` fighting over state\n- Clear single path: parent updates \u2192 child receives new prop \u2192 child re-renders\n\nThe parent is the single owner and sole decision-maker. The child is stateless regarding `isOpen`."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution A identifies the bidirectional problem but proposes a transactional workaround that maintains multiple writers with filtering logic\u2014this is a patch, not true unidirectional flow. Solution B directly applies the principle by establishing single ownership and eliminating competing writes entirely, providing clear visual problem representation and consistent implementation. Solution B demonstrates mastery by recognizing that the root fix is architectural (clear ownership) rather than tactical (filtering self-updates)."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

@@ -2,6 +2,7 @@
 name: ps-illegal-states-unrepresentable
 description: System design should prevent misuse by construction. Use when reviewing defensive code with runtime checks.
 severity: SUGGEST
+version: 1.0.0
 ---
 
 # Illegal States Unrepresentable

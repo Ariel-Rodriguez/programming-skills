@@ -8,7 +8,6 @@ This is a pure function - no side effects.
 import json
 import re
 from pathlib import Path
-from typing import Any
 
 
 def extract_judgment_reasoning(judgment: dict) -> str:
@@ -99,128 +98,156 @@ def normalize_rating(rating: str) -> str:
     return "vague"
 
 
-def process_benchmark_file(file_path: Path) -> dict | None:
+def _normalize_timestamp(timestamp: str) -> str:
     """
-    Process a single benchmark JSON file and extract structured data.
-
-    Args:
-        file_path: Path to the benchmark JSON file
-
-    Returns:
-        Structured benchmark data dict or None if processing fails
+    Normalize timestamp to ISO format (YYYY-MM-DDTHH:MM:SS).
     """
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"Error reading {file_path}: {e}")
-        return None
-
-    # Extract timestamp from filename or data
-    timestamp = data.get('timestamp', '')
     if not timestamp:
-        # Extract from filename if no timestamp in data
-        match = re.search(r'(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})', file_path.stem)
-        if match:
-            timestamp = match.group(1).replace('T', ' ')
+        return ''
 
-    # Get provider and model from filename or data
-    filename = file_path.stem
-    if 'ollama' in filename:
-        provider = 'ollama'
-    elif 'copilot' in filename:
-        provider = 'copilot'
-    elif 'gemini' in filename:
-        provider = 'gemini'
-    else:
-        provider = 'unknown'
+    iso_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z)?$', timestamp)
+    if iso_match:
+        return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}T{iso_match.group(4)}:{iso_match.group(5)}:{iso_match.group(6)}"
 
-    # Extract model name from filename
-    # Pattern: benchmark-ollama-modelname-timestamp
-    model_match = re.search(r'benchmark-[^-]+-([^--]+)-\d{4}', filename)
-    if model_match:
-        model = model_match.group(1)
-    else:
-        model = 'unknown'
+    compact_match = re.match(r'^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$', timestamp)
+    if compact_match:
+        return f"{compact_match.group(1)}-{compact_match.group(2)}-{compact_match.group(3)}T{compact_match.group(4)}:{compact_match.group(5)}:{compact_match.group(6)}"
 
-    # Get results from data
-    results = data.get('results', [])
-    if not results:
-        return None
+    dashed_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})$', timestamp)
+    if dashed_match:
+        return f"{dashed_match.group(1)}-{dashed_match.group(2)}-{dashed_match.group(3)}T{dashed_match.group(4)}:{dashed_match.group(5)}:{dashed_match.group(6)}"
 
-    # Build skills list
-    skills = []
-    for result in results:
-        judgment = result.get('judgment', {})
-
-        # Get before/after code from test results
-        test_results = result.get('results', [])
-        before_code, after_code = extract_code_from_test_results(test_results, provider)
-
-        # Determine improvement
-        overall_better = judgment.get('overall_better', 'Equal')
-        if overall_better == 'B':
-            improvement = 'yes'
-        elif overall_better == 'A':
-            improvement = 'no'
-        else:
-            improvement = 'neutral'
-
-        skill_data = {
-            'skill_name': result.get('skill', 'unknown'),
-            'provider': provider,
-            'model': model,
-            'timestamp': timestamp,
-            'baseline_rating': normalize_rating(judgment.get('option_a_rating', '')),
-            'skill_rating': normalize_rating(judgment.get('option_b_rating', '')),
-            'improvement': improvement,
-            'reasoning': extract_judgment_reasoning(judgment),
-            'before_code': before_code,
-            'after_code': after_code,
-            'judgment': judgment
-        }
-        skills.append(skill_data)
-
-    return {
-        'benchmark_id': file_path.stem,
-        'timestamp': timestamp,
-        'provider': provider,
-        'model': model,
-        'skills': skills
-    }
+    return timestamp
 
 
-def collect_all_benchmarks(benchmarks_dir: Path) -> list[dict]:
+def _benchmark_id_from_parts(provider: str, model: str, timestamp: str, fallback_stamp: str | None) -> str:
+    stamp = _normalize_timestamp(timestamp)
+    if stamp and "T" in stamp:
+        stamp = stamp.replace(":", "").replace("-", "").replace("T", "-")
+        stamp = stamp[:15]
+    if not stamp and fallback_stamp:
+        stamp = fallback_stamp
+    
+    # Sanitize model name for Windows paths (no colons)
+    safe_model = str(model).replace(":", "-")
+    return f"{provider}-{safe_model}-{stamp or 'unknown'}"
+
+
+def collect_all_benchmarks(history_dir: Path) -> list[dict]:
     """
-    Collect all benchmark data from a directory.
+    Collect all benchmark data from a directory of per-skill history files.
 
     Args:
-        benchmarks_dir: Directory containing benchmark JSON files
+        history_dir: Directory containing per-skill history JSON files
 
     Returns:
         List of structured benchmark data
     """
-    if not benchmarks_dir.exists():
+    if not history_dir.exists():
         return []
 
-    all_data = []
+    benchmarks_map: dict[tuple[str, str, str], dict] = {}
 
-    # Look for summary.json files
-    for summary_file in benchmarks_dir.glob('**/summary.json'):
-        data = process_benchmark_file(summary_file)
-        if data:
-            all_data.append(data)
+    for skill_file in history_dir.glob('**/*.json'):
+        if skill_file.name.startswith("summary-"):
+            continue
+        try:
+            data = json.loads(skill_file.read_text())
+        except Exception:
+            continue
 
-    # Also look for benchmark-*.json files
-    for benchmark_file in benchmarks_dir.glob('**/benchmark-*.json'):
-        data = process_benchmark_file(benchmark_file)
-        if data:
-            all_data.append(data)
+        skill_name = data.get('skill', skill_file.parent.name)
+        model = data.get('model', 'unknown')
+        provider = data.get('provider', 'unknown')
+        timestamp = _normalize_timestamp(data.get('timestamp', ''))
 
-    # Sort by timestamp (newest first)
+        if provider == 'unknown':
+            if 'sonnet' in str(model).lower():
+                provider = 'copilot'
+            elif 'gpt' in str(model).lower():
+                provider = 'codex'
+
+        fallback_stamp = None
+        match = re.search(r'(\d{8}-\d{6})', skill_file.stem)
+        if match:
+            fallback_stamp = match.group(1)
+
+        key = (provider, model, timestamp or fallback_stamp or 'unknown')
+        benchmark_id = _benchmark_id_from_parts(provider, model, timestamp, fallback_stamp)
+
+        benchmark = benchmarks_map.get(key)
+        if not benchmark:
+            benchmark = {
+                'benchmark_id': benchmark_id,
+                'timestamp': timestamp,
+                'provider': provider,
+                'model': model,
+                'skills': []
+            }
+            benchmarks_map[key] = benchmark
+
+        judgment = data.get('judgment', {})
+        test_results = data.get('results', [])
+        before_code, after_code = extract_code_from_test_results(test_results, provider)
+
+        overall_better = judgment.get('overall_better') if judgment else None
+        if overall_better in ('A', 'B', 'Equal'):
+            if overall_better == 'B':
+                improvement = 'yes'
+            elif overall_better == 'A':
+                improvement = 'no'
+            else:
+                improvement = 'neutral'
+        else:
+            improvement = data.get('improvement')
+            if isinstance(improvement, (int, float)):
+                improvement = 'yes' if improvement > 0 else ('no' if improvement < 0 else 'neutral')
+            elif improvement is None:
+                improvement = 'neutral'
+
+        skill_data = {
+            'skill_name': skill_name,
+            'skill_version': data.get('skill_version', '1.0.0'),
+            'provider': provider,
+            'model': model,
+            'timestamp': timestamp,
+            'baseline_rating': normalize_rating(judgment.get('option_a_rating', data.get('baseline_rating', ''))),
+            'skill_rating': normalize_rating(judgment.get('option_b_rating', data.get('skill_rating', ''))),
+            'improvement': improvement,
+            'reasoning': extract_judgment_reasoning(judgment) if judgment else 'No reasoning provided',
+            'before_code': before_code,
+            'after_code': after_code,
+            'judgment': judgment,
+            'judge_error': data.get('judge_error', False),
+            'tests': [
+                {
+                    'name': t.get('name', 'unknown'),
+                    'input': t.get('input', ''),
+                    'expected': t.get('expected', {}),
+                    'baseline_response': t.get('baseline', {}).get('response_full', ''),
+                    'skill_response': t.get('skill', {}).get('response_full', '')
+                }
+                for t in test_results
+            ]
+        }
+        benchmark['skills'].append(skill_data)
+
+    all_data = list(benchmarks_map.values())
     all_data.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-
     return all_data
+
+
+def _write_per_run_data(output_dir: Path, benchmarks: list[dict]) -> None:
+    """
+    Write per-run data.json for each benchmark.
+    """
+    for benchmark in benchmarks:
+        benchmark_id = benchmark.get("benchmark_id", "unknown")
+        per_run = build_aggregated_data([benchmark])
+        output_file = output_dir / "data" / benchmark_id / "data.json"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(per_run, f, indent=2)
 
 
 def build_aggregated_data(benchmarks: list[dict]) -> dict:
@@ -245,62 +272,87 @@ def build_aggregated_data(benchmarks: list[dict]) -> dict:
             skill_names.add(skill.get('skill_name', 'unknown'))
         provider_models.add((benchmark.get('provider', ''), benchmark.get('model', '')))
 
-    # Count improvements
-    total_skills = 0
-    improvements = 0
-    regressions = 0
-    neutral = 0
-
+    # 1. Track latest run per Model + Skill
+    model_skill_latest: dict[tuple[str, str], dict] = {}
+    
     for benchmark in benchmarks:
+        model = benchmark.get('model', 'unknown')
         for skill in benchmark.get('skills', []):
-            total_skills += 1
-            if skill.get('improvement') == 'yes':
-                improvements += 1
-            elif skill.get('improvement') == 'no':
-                regressions += 1
-            else:
-                neutral += 1
+            skill_name = skill.get('skill_name', 'unknown')
+            key = (model, skill_name)
+            
+            # Since benchmarks are sorted by timestamp desc in collect_all_benchmarks,
+            # the first one we see for a key is the latest.
+            if key not in model_skill_latest:
+                model_skill_latest[key] = skill
 
-    # Build summary
-    summary = {
-        'total_benchmarks': len(benchmarks),
-        'total_skills': total_skills,
-        'improvements': improvements,
-        'regressions': regressions,
-        'neutral': neutral,
-        'improvement_rate': round((improvements / total_skills * 100) if total_skills > 0 else 0, 1)
-    }
+    # 2. Group by model to generate leaderboard
+    model_stats: dict[str, dict] = {}
+    for (model, skill_name), skill_data in model_skill_latest.items():
+        if model not in model_stats:
+            model_stats[model] = {
+                'model': model,
+                'provider': skill_data.get('provider', 'unknown'),
+                'total_tested': 0,
+                'improvements': 0,
+                'improvement_rate': 0
+            }
+        
+        stats = model_stats[model]
+        stats['total_tested'] += 1
+        if skill_data.get('improvement') == 'yes':
+            stats['improvements'] += 1
+
+    # 3. Finalize leaderboard
+    leaderboard = []
+    for model_name, stats in model_stats.items():
+        if stats['total_tested'] > 0:
+            stats['improvement_rate'] = round((stats['improvements'] / stats['total_tested'] * 100), 1)
+        leaderboard.append(stats)
+    
+    # Sort leaderboard by rate desc, then total tested desc
+    leaderboard.sort(key=lambda x: (x['improvement_rate'], x['total_tested']), reverse=True)
+
+    # 4. Global summary (still useful for general totals)
+    total_benchmarks = len(benchmarks)
 
     return {
         'benchmarks': benchmarks,
-        'summary': summary,
+        'summary': {
+            'total_benchmarks': total_benchmarks,
+            'leaderboard': leaderboard
+        },
         'unique_skills': sorted(list(skill_names)),
         'provider_models': sorted(list(provider_models))
     }
 
 
-def generate_dashboard_data(benchmarks_dir: Path, output_file: Path) -> bool:
+def generate_dashboard_data(history_dir: Path, output_dir: Path) -> bool:
     """
     Main function: Generate dashboard data from benchmark files.
 
-    Pure function - only reads from benchmarks_dir, writes to output_file.
+    Pure function - only reads from history_dir, writes to output_dir.
 
     Args:
-        benchmarks_dir: Directory containing benchmark JSON files
-        output_file: Path to write aggregated data JSON
+        history_dir: Directory containing per-skill history JSON files
+        output_dir: Output directory for benchmarks.json and data/*
 
     Returns:
         True if successful, False otherwise
     """
     try:
         # Collect all benchmarks
-        benchmarks = collect_all_benchmarks(benchmarks_dir)
+        benchmarks = collect_all_benchmarks(history_dir)
 
         # Build aggregated data
         aggregated = build_aggregated_data(benchmarks)
 
+        # Write per-run data.json files
+        _write_per_run_data(output_dir, benchmarks)
+
         # Write output
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / "benchmarks.json"
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(aggregated, f, indent=2)
 
@@ -319,14 +371,14 @@ if __name__ == "__main__":
     import sys
 
     # Default paths
-    benchmarks_dir = Path("docs/benchmarks")
-    output_file = Path("docs/benchmarks.json")
+    results_dir = Path("tests/data-history")
+    output_dir = Path("site/benchmarks")
 
     # Allow command line overrides
     if len(sys.argv) > 1:
-        benchmarks_dir = Path(sys.argv[1])
+        results_dir = Path(sys.argv[1])
     if len(sys.argv) > 2:
-        output_file = Path(sys.argv[2])
+        output_dir = Path(sys.argv[2])
 
-    success = generate_dashboard_data(benchmarks_dir, output_file)
+    success = generate_dashboard_data(results_dir, output_dir)
     sys.exit(0 if success else 1)

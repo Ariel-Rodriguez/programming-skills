@@ -2,6 +2,7 @@
 name: ps-local-reasoning
 description: Ensures code is understandable locally without global context. Use when reviewing code with hidden dependencies or global state.
 severity: WARN
+version: 1.0.0
 ---
 
 # Local Reasoning

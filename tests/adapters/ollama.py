@@ -20,14 +20,20 @@ class OllamaAdapter:
     Error Handling Design: Network errors become Result types.
     """
     
-    def __init__(self, use_cloud: bool = False):
+    def __init__(self, use_cloud: bool = None, model_name: str = None):
         """
         Initialize adapter.
-        
+
         Args:
             use_cloud: Use Ollama Cloud instead of local instance
+                      If None, auto-detect based on model name
+            model_name: Model name for auto-detection
         """
-        self.use_cloud = use_cloud
+        # Auto-detect cloud usage: if model ends with "cloud" and use_cloud not specified
+        if use_cloud is None and model_name:
+            self.use_cloud = model_name.lower().endswith("-cloud") or model_name.lower().endswith("cloud")
+        else:
+            self.use_cloud = use_cloud or False
     
     def call(self, prompt: str, config: ModelConfig) -> Result:
         """
@@ -67,7 +73,7 @@ class OllamaAdapter:
                 headers=headers,
                 method='POST'
             )
-            with urllib.request.urlopen(req, timeout=300) as response:
+            with urllib.request.urlopen(req, timeout=600) as response:
                 res = json.loads(response.read().decode('utf-8'))
                 content = res['message']['content']
                 return Success(content)
