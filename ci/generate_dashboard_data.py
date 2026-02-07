@@ -8,7 +8,6 @@ This is a pure function - no side effects.
 import json
 import re
 from pathlib import Path
-from typing import Any
 
 
 def extract_judgment_reasoning(judgment: dict) -> str:
@@ -99,6 +98,50 @@ def normalize_rating(rating: str) -> str:
     return "vague"
 
 
+def _parse_benchmark_id(benchmark_id: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Parse benchmark_id in the format: provider-model-YYYYMMDD-HHMMSS
+
+    Returns:
+        (provider, model, timestamp) or (None, None, None) if not matched.
+    """
+    match = re.match(r'^(?P<provider>[^-]+)-(?P<model>.+)-(?P<timestamp>\d{8}-\d{6})$', benchmark_id)
+    if not match:
+        return None, None, None
+    return match.group('provider'), match.group('model'), match.group('timestamp')
+
+
+def _normalize_timestamp(timestamp: str) -> str:
+    """
+    Normalize timestamp to ISO format (YYYY-MM-DDTHH:MM:SS).
+    """
+    if not timestamp:
+        return ''
+
+    iso_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z)?$', timestamp)
+    if iso_match:
+        return f"{iso_match.group(1)}-{iso_match.group(2)}-{iso_match.group(3)}T{iso_match.group(4)}:{iso_match.group(5)}:{iso_match.group(6)}"
+
+    compact_match = re.match(r'^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$', timestamp)
+    if compact_match:
+        return f"{compact_match.group(1)}-{compact_match.group(2)}-{compact_match.group(3)}T{compact_match.group(4)}:{compact_match.group(5)}:{compact_match.group(6)}"
+
+    dashed_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})$', timestamp)
+    if dashed_match:
+        return f"{dashed_match.group(1)}-{dashed_match.group(2)}-{dashed_match.group(3)}T{dashed_match.group(4)}:{dashed_match.group(5)}:{dashed_match.group(6)}"
+
+    return timestamp
+
+
+def _benchmark_id_from_path(file_path: Path) -> str:
+    """
+    Determine benchmark_id based on file path.
+    """
+    if file_path.name == "summary.json":
+        return file_path.parent.name
+    return file_path.stem
+
+
 def process_benchmark_file(file_path: Path) -> dict | None:
     """
     Process a single benchmark JSON file and extract structured data.
@@ -116,32 +159,48 @@ def process_benchmark_file(file_path: Path) -> dict | None:
         print(f"Error reading {file_path}: {e}")
         return None
 
-    # Extract timestamp from filename or data
-    timestamp = data.get('timestamp', '')
+    benchmark_id = _benchmark_id_from_path(file_path)
+
+    # Extract timestamp from summary or benchmark id
+    timestamp = _normalize_timestamp(data.get('timestamp', ''))
     if not timestamp:
-        # Extract from filename if no timestamp in data
+        _, _, parsed_timestamp = _parse_benchmark_id(benchmark_id)
+        if parsed_timestamp:
+            timestamp = _normalize_timestamp(parsed_timestamp)
+    if not timestamp:
         match = re.search(r'(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})', file_path.stem)
         if match:
-            timestamp = match.group(1).replace('T', ' ')
+            timestamp = _normalize_timestamp(match.group(1))
 
-    # Get provider and model from filename or data
-    filename = file_path.stem
-    if 'ollama' in filename:
-        provider = 'ollama'
-    elif 'copilot' in filename:
-        provider = 'copilot'
-    elif 'gemini' in filename:
-        provider = 'gemini'
-    else:
-        provider = 'unknown'
+    # Get provider and model from JSON data (primary source)
+    results = data.get('results', [])
 
-    # Extract model name from filename
-    # Pattern: benchmark-ollama-modelname-timestamp
-    model_match = re.search(r'benchmark-[^-]+-([^--]+)-\d{4}', filename)
-    if model_match:
-        model = model_match.group(1)
-    else:
-        model = 'unknown'
+    provider = 'unknown'
+    model = 'unknown'
+
+    if results:
+        model = results[0].get('model', 'unknown')
+
+    parsed_provider, parsed_model, _ = _parse_benchmark_id(benchmark_id)
+    if provider == 'unknown' and parsed_provider:
+        provider = parsed_provider
+    if (not model or model == 'unknown') and parsed_model:
+        model = parsed_model
+
+    if (not model or model == 'unknown'):
+        model_match = re.search(r'benchmark-[^-]+-(.+)-\d{4}', benchmark_id)
+        if model_match:
+            model = model_match.group(1)
+
+    if provider == 'unknown':
+        if 'cloud' in str(model).lower():
+            provider = 'ollama'
+        elif 'ollama' in benchmark_id:
+            provider = 'ollama'
+        elif 'copilot' in benchmark_id:
+            provider = 'copilot'
+        elif 'gemini' in benchmark_id:
+            provider = 'gemini'
 
     # Get results from data
     results = data.get('results', [])
@@ -182,7 +241,7 @@ def process_benchmark_file(file_path: Path) -> dict | None:
         skills.append(skill_data)
 
     return {
-        'benchmark_id': file_path.stem,
+        'benchmark_id': benchmark_id,
         'timestamp': timestamp,
         'provider': provider,
         'model': model,
@@ -221,6 +280,21 @@ def collect_all_benchmarks(benchmarks_dir: Path) -> list[dict]:
     all_data.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
 
     return all_data
+
+
+def _write_per_run_data(benchmarks_dir: Path) -> None:
+    """
+    Write per-run data.json next to each summary.json file.
+    """
+    for summary_file in benchmarks_dir.glob('**/summary.json'):
+        benchmark = process_benchmark_file(summary_file)
+        if not benchmark:
+            continue
+        per_run = build_aggregated_data([benchmark])
+        output_file = summary_file.parent / "data.json"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(per_run, f, indent=2)
 
 
 def build_aggregated_data(benchmarks: list[dict]) -> dict:
@@ -283,7 +357,8 @@ def generate_dashboard_data(benchmarks_dir: Path, output_file: Path) -> bool:
     """
     Main function: Generate dashboard data from benchmark files.
 
-    Pure function - only reads from benchmarks_dir, writes to output_file.
+    Pure function - only reads from benchmarks_dir, writes to output_file
+    and per-run data.json files next to summary.json.
 
     Args:
         benchmarks_dir: Directory containing benchmark JSON files
@@ -298,6 +373,9 @@ def generate_dashboard_data(benchmarks_dir: Path, output_file: Path) -> bool:
 
         # Build aggregated data
         aggregated = build_aggregated_data(benchmarks)
+
+        # Write per-run data.json files
+        _write_per_run_data(benchmarks_dir)
 
         # Write output
         output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -320,7 +398,7 @@ if __name__ == "__main__":
 
     # Default paths
     benchmarks_dir = Path("docs/benchmarks")
-    output_file = Path("docs/benchmarks.json")
+    output_file = Path("docs/benchmarks/benchmarks.json")
 
     # Allow command line overrides
     if len(sys.argv) > 1:

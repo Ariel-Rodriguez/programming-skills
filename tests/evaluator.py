@@ -35,7 +35,7 @@ from services import (
 )
 
 # Adapter imports
-from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter
+from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter, CodexCLIAdapter
 
 
 def main() -> int:
@@ -54,7 +54,7 @@ def main() -> int:
     parser.add_argument("--model", help="Model to use (default: llama3.2:latest)")
     parser.add_argument(
         "--provider",
-        choices=["ollama", "copilot"],
+        choices=["ollama", "copilot", "codex"],
         default="ollama",
         help="Model provider"
     )
@@ -80,8 +80,19 @@ def main() -> int:
         results_dir = Path("tests/results")
     
     summary_path = results_dir / "summary.json"
-    model_name = args.model or "llama3.2:latest"
-    provider = Provider.OLLAMA if args.provider == "ollama" else Provider.COPILOT
+    if args.model:
+        model_name = args.model
+    else:
+        if provider == Provider.CODEX:
+            model_name = "gpt-5.1-codex-mini"
+        else:
+            model_name = "llama3.2:latest"
+    if args.provider == "ollama":
+        provider = Provider.OLLAMA
+    elif args.provider == "copilot":
+        provider = Provider.COPILOT
+    else:
+        provider = Provider.CODEX
     
     # Handle report-only modes
     if args.report and not args.all and not args.skill:
@@ -121,9 +132,12 @@ def main() -> int:
     
     # Select model adapter based on provider
     if provider == Provider.OLLAMA:
-        model_port = OllamaAdapter(use_cloud=args.ollama_cloud)
-    else:
+        # Auto-detect cloud usage if model ends with "cloud"
+        model_port = OllamaAdapter(use_cloud=args.ollama_cloud if args.ollama_cloud else None, model_name=model_name)
+    elif provider == Provider.COPILOT:
         model_port = CopilotCLIAdapter()
+    else:
+        model_port = CodexCLIAdapter()
     
     # Discover skills
     all_skills = discover_skills(skills_dir, fs)
@@ -152,6 +166,10 @@ def main() -> int:
             else:
                 print(f"Error: Ollama not running at {config.base_url}")
                 print("Start with: ollama serve")
+            return 1
+    if provider == Provider.CODEX:
+        if not model_port.is_available(config):
+            print("Error: Codex CLI not available. Install Codex CLI and sign in with ChatGPT.")
             return 1
     
     # Create results directory

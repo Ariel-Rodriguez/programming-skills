@@ -22,11 +22,13 @@ Download artifacts
     ↓
 Generate dashboard data (pure function)
     ↓
-Save to docs/benchmarks/{timestamp}.json
+Save to docs/benchmarks/{benchmark_id}/summary.json
     ↓
-Push docs/ to benchmark-history orphan branch
+Generate per-run data.json + aggregate benchmarks.json
     ↓
-Generate basic index.html
+Generate index.html pages
+    ↓
+Push docs/benchmarks/ to benchmark-history orphan branch
     ↓
 Commit & push index.html to orphan branch
     ↓
@@ -40,10 +42,13 @@ docs/
 ├── specs/
 │   ├── benchmark-workflow.md     # This file
 │   └── benchmark-page.md         # Page design spec (separate spec)
-├── benchmarks/                   # Generated data (auto-created)
-│   ├── {timestamp}.json          # Individual benchmark results
-│   └── index.html                # Dashboard page
-└── benchmarks.json               # Aggregated data for quick access
+└── benchmarks/                   # Generated data (auto-created)
+    ├── {benchmark_id}/           # Each run gets its own folder
+    │   ├── summary.json          # Raw benchmark summary
+    │   ├── data.json             # Extracted data for dashboard
+    │   └── index.html            # Per-run dashboard page
+    ├── benchmarks.json           # Aggregated data for JS
+    └── index.html                # Main dashboard (aggregated)
 ```
 
 ## Files
@@ -82,7 +87,7 @@ Pure function that:
 Pure function that:
 - Takes structured data
 - Generates Bootstrap-styled HTML
-- Outputs index.html
+- Outputs index.html (aggregate + per-run)
 
 ## Output Format
 

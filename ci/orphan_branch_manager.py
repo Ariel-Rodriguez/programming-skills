@@ -239,12 +239,24 @@ def manage_benchmark_branch(
     if not result.success:
         print(f"Warning: Could not clean untracked files: {result.message}")
 
-    # Copy docs to branch
-    result = manager.copy_files_to_branch(docs_dir)
-    if not result.success:
-        print(f"Error copying files: {result.message}")
-        return False
-    print(f"Copied docs to branch")
+    # Copy docs to branch (if docs exists)
+    if docs_dir.exists():
+        result = manager.copy_files_to_branch(docs_dir)
+        if not result.success:
+            print(f"Error copying files: {result.message}")
+            return False
+        print(f"Copied docs to branch")
+    else:
+        print(f"Warning: docs directory does not exist: {docs_dir}")
+        print("Creating minimal docs structure...")
+        # Create a minimal docs folder with a README
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "README.md").write_text("# Benchmark Data\n\nThis branch contains benchmark results for the programming skills project.\n")
+        result = manager.copy_files_to_branch(docs_dir)
+        if not result.success:
+            print(f"Error copying files: {result.message}")
+            return False
+        print(f"Copied docs to branch")
 
     # Add and commit
     result = manager.add_all_files()

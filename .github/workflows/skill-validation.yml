@@ -107,11 +107,6 @@ jobs:
           # Construct arguments array for safety
           ARGS=(--provider "${{ matrix.provider }}" --model "${{ matrix.model }}" --judge --verbose --report --threshold 50)
 
-          if [ -n "${{ matrix.extra_args }}" ]; then
-            # Split extra_args safely if needed, but for now assuming simple flags
-            ARGS+=(${{ matrix.extra_args }})
-          fi
-
           if [ -n "${{ matrix.skill }}" ]; then
             ARGS+=(--skill "${{ matrix.skill }}")
           else

@@ -9,103 +9,156 @@ This spec describes the HTML/CSS/JS structure for the benchmark dashboard page.
 - **HTML5**: Semantic structure
 - **Bootstrap 5**: CSS framework for layout and components
 - **Vanilla JavaScript**: No build step, pure client-side
+- **Prism.js (CDN)**: For syntax highlighting in code blocks
 - **Chart.js (CDN)**: For future time series charts
 - **Diff Match Patch (CDN)**: For code comparison highlighting
 
-## Page Structure
+## Directory Structure
+
+```
+docs/
+└── benchmarks/
+    ├── {benchmark_id}/                 # Each run gets its own folder
+    │   ├── summary.json                # Full benchmark results
+    │   ├── data.json                   # Extracted data for dashboard
+    │   └── index.html                  # Individual page for this run
+    ├── index.html                      # Main dashboard (aggregated)
+    └── benchmarks.json                 # Aggregated data for JS
+```
+
+## Page Structure (index.html)
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Programming Skills Benchmarks</title>
+
   <!-- Bootstrap 5 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Prism.js for syntax highlighting -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+
   <style>
-    /* Custom styles for code diff highlighting */
-    .code-diff-add { background-color: #d4edda; }
-    .code-diff-remove { background-color: #f8d7da; }
-    .code-line-numbers { background-color: #f8f9fa; }
+    /* Custom styles */
+    .code-container {
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+    }
+    .code-comparison .code-section {
+      margin-bottom: 16px;
+    }
+    .code-comparison h7 {
+      color: #6c757d;
+      font-weight: 600;
+    }
+    .judgment-box {
+      background-color: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 16px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .expandable-content {
+      display: none;
+    }
+    .expandable-content.expanded {
+      display: block;
+    }
   </style>
 </head>
-<body>
+<body data-benchmarks-src="benchmarks.json">
   <!-- Header -->
   <nav class="navbar navbar-dark bg-dark">
     <div class="container">
-      <span class="navbar-brand">Programming Skills Benchmarks</span>
-      <button class="btn btn-sm btn-outline-light" onclick="refreshData()">Refresh</button>
+      <span class="navbar-brand">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        Programming Skills Benchmarks
+      </span>
+      <button class="btn btn-sm btn-outline-light" onclick="refreshDashboard()">Refresh</button>
     </div>
   </nav>
 
   <!-- Summary Cards -->
   <div class="container mt-4">
-    <div class="row">
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Total Benchmarks</h5>
-            <h2 class="card-text" id="total-benchmarks">0</h2>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Skills Tested</h5>
-            <h2 class="card-text" id="total-skills">0</h2>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Last Updated</h5>
-            <p class="card-text" id="last-updated">-</p>
-          </div>
-        </div>
-      </div>
+    <div class="row" id="summary-cards">
+      <!-- Populated by JS -->
     </div>
   </div>
 
   <!-- Filters -->
   <div class="container mt-4">
-    <div class="row">
-      <div class="col">
-        <div class="input-group">
-          <span class="input-group-text">Filter by:</span>
-          <select class="form-select" id="filter-provider">
-            <option value="">All Providers</option>
-          </select>
-          <select class="form-select" id="filter-model">
-            <option value="">All Models</option>
-          </select>
-        </div>
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Provider</label>
+        <select class="form-select" id="filter-provider" onchange="filterTable()">
+          <option value="">All Providers</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Model</label>
+        <select class="form-select" id="filter-model" onchange="filterTable()">
+          <option value="">All Models</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Skill</label>
+        <select class="form-select" id="filter-skill" onchange="filterTable()">
+          <option value="">All Skills</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Improvement</label>
+        <select class="form-select" id="filter-improvement" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Improvement</option>
+          <option value="no">Regression</option>
+          <option value="neutral">Neutral</option>
+        </select>
       </div>
     </div>
   </div>
 
   <!-- Skills Table -->
   <div class="container mt-4">
-    <table class="table table-striped table-hover" id="skills-table">
-      <thead>
-        <tr>
-          <th>Skill</th>
-          <th>Provider</th>
-          <th>Model</th>
-          <th>Before</th>
-          <th>After</th>
-          <th>Improvement</th>
-          <th>View Details</th>
-        </tr>
-      </thead>
-      <tbody id="skills-table-body">
-        <!-- Rows populated by JS -->
-      </tbody>
-    </table>
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Benchmark Results</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover mb-0" id="skills-table">
+            <thead class="table-light">
+              <tr>
+                <th>Skill</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Before</th>
+                <th>After</th>
+                <th>Improvement</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="skills-table-body">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal for Details -->
   <div class="modal fade" id="detailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="detailModalTitle">Skill Details</h5>
@@ -113,25 +166,45 @@ This spec describes the HTML/CSS/JS structure for the benchmark dashboard page.
         </div>
         <div class="modal-body">
           <!-- Judgment Reasoning -->
-          <div class="mb-3">
-            <h6>Judge Reasoning</h6>
-            <div class="alert alert-info" id="detail-reasoning"></div>
+          <div class="judgment-box">
+            <h6>Judge Assessment</h6>
+            <div class="row">
+              <div class="col-md-6">
+                <p><strong>Before (Baseline):</strong> <span id="modal-before-rating"></span></p>
+                <p><strong>After (With Skill):</strong> <span id="modal-after-rating"></span></p>
+              </div>
+              <div class="col-md-6">
+                <p><strong>Overall Better:</strong> <span id="modal-better"></span></p>
+                <p><strong>Judge Score:</strong> <span id="modal-score"></span>/100</p>
+              </div>
+            </div>
+            <hr>
+            <div><strong>Reasoning:</strong> <div id="modal-reasoning"></div></div>
           </div>
 
           <!-- Code Comparison -->
-          <div>
+          <div class="code-comparison">
             <h6>Code Comparison</h6>
-            <div class="row">
-              <div class="col">
-                <h7>Before (Baseline)</h7>
-                <pre class="bg-light p-2 rounded" id="detail-before-code"></pre>
+
+            <div class="code-section">
+              <h7>Before (Baseline) <small class="text-muted">Click to expand</small></h7>
+              <div class="code-container" id="modal-before-code">
+                <pre><code class="language-javascript" id="code-before"></code></pre>
               </div>
-              <div class="col">
-                <h7>After (With Skill)</h7>
-                <pre class="bg-light p-2 rounded" id="detail-after-code"></pre>
+              <button class="btn btn-sm btn-outline-primary mt-2" onclick="toggleExpand('modal-before-code')">Expand</button>
+            </div>
+
+            <div class="code-section">
+              <h7>After (With Skill) <small class="text-muted">Click to expand</small></h7>
+              <div class="code-container" id="modal-after-code">
+                <pre><code class="language-javascript" id="code-after"></code></pre>
               </div>
+              <button class="btn btn-sm btn-outline-primary mt-2" onclick="toggleExpand('modal-after-code')">Expand</button>
             </div>
           </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
       </div>
     </div>
@@ -139,90 +212,96 @@ This spec describes the HTML/CSS/JS structure for the benchmark dashboard page.
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Prism.js -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Diff Match Patch -->
   <script src="https://cdn.jsdelivr.net/npm/diff-match-patch@1.0.5/index.min.js"></script>
+
   <!-- Custom JS -->
   <script src="scripts/app.js"></script>
 </body>
 </html>
 ```
 
-## Data Loading
+## Data Loading (scripts/app.js)
 
 ```javascript
-// Load aggregated data from docs/benchmarks.json
-fetch('benchmarks.json')
+// Load aggregated data from data-benchmarks-src attribute
+const src = document.body.dataset.benchmarksSrc || 'benchmarks.json';
+fetch(src)
   .then(response => response.json())
   .then(data => {
-    renderSummary(data);
-    renderTable(data);
+    renderSummary(data.summary);
+    renderTable(data.benchmarks);
+    populateFilters(data);
   });
 ```
 
-## Table Row Structure
+Per-run pages set `data-benchmarks-src="data.json"` on the `<body>` tag.
 
-```javascript
-function renderTableRow(skill) {
-  return `
-    <tr>
-      <td>${skill.name}</td>
-      <td>${skill.provider}</td>
-      <td>${skill.model}</td>
-      <td><span class="badge bg-${ratingColor(skill.baseline_rating)}">${skill.baseline_rating}</span></td>
-      <td><span class="badge bg-${ratingColor(skill.skill_rating)}">${skill.skill_rating}</span></td>
-      <td>
-        ${skill.improvement === 'yes'
-          ? '<span class="badge bg-success">Yes</span>'
-          : '<span class="badge bg-secondary">No</span>'}
-      </td>
-      <td><button class="btn btn-sm btn-primary" onclick="showDetails(${JSON.stringify(skill)})">View</button></td>
-    </tr>
-  `;
-}
-```
+## Data Structure
 
-## Code Diff Highlighting (Future Enhancement)
-
-```javascript
-function highlightCodeDiff(before, after) {
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(before, after);
-  dmp.diff_cleanupSemantic(diffs);
-
-  return diffs.map(([op, text]) => {
-    if (op === 1) return `<span class="code-diff-add">${text}</span>`;  // Add
-    if (op === -1) return `<span class="code-diff-remove">${text}</span>`;  // Remove
-    return text;
-  }).join('');
-}
-```
-
-## Chart.js Integration (Future)
-
-```javascript
-function renderTimeSeriesChart(data) {
-  const ctx = document.getElementById('improvementChart').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.timestamps,
-      datasets: [{
-        label: 'Average Improvement',
-        data: data.improvements,
-        borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1
-      }]
+### Aggregated Data Format
+```json
+{
+  "benchmarks": [
+    {
+      "benchmark_id": "ollama-rnj-1-8b-cloud-2026-02-07T14-30-00",
+      "timestamp": "2026-02-07T14:30:00",
+      "provider": "ollama",
+      "model": "rnj-1:8b-cloud",
+      "skills": [
+        {
+          "skill_name": "ps-composition-over-coordination",
+          "baseline_rating": "vague",
+          "skill_rating": "outstanding",
+          "improvement": "yes",
+          "reasoning": "...\n\nJudgment: ...",
+          "before_code": "full code...",
+          "after_code": "full code..."
+        }
+      ]
     }
-  });
+  ],
+  "summary": {
+    "total_benchmarks": 5,
+    "total_skills": 60,
+    "improvements": 45,
+    "regressions": 3,
+    "neutral": 12
+  }
 }
 ```
 
-## Future Enhancements
+## Key Features
 
-1. **Time Series Charts**: Show improvement over time
-2. **Provider Comparison**: Bar chart comparing providers
-3. **Skill Heatmap**: Visual representation of improvement by skill
-4. **Export Function**: Download results as CSV
-5. **Version Comparison**: Compare any two benchmark runs
+### 1. Filter Table
+- Filter by provider (ollama, copilot, gemini)
+- Filter by model name
+- Filter by skill name
+- Filter by improvement status
+
+### 2. Expandable Code Display
+- Code blocks show partial content by default (300 lines max)
+- Expand button to show full code
+- Syntax highlighting with Prism.js
+
+### 3. Modal Details
+- Judgment reasoning with clear formatting
+- Side-by-side code comparison
+- Rating badges (vague/regular/good/outstanding)
+
+### 4. History Preservation
+- Each benchmark run stored in `docs/benchmarks/{timestamp}/`
+- `index.html` aggregates all benchmarks
+- Previous results never overwritten
+
+## Implementation Tasks
+
+1. **Fix provider/model extraction** - Parse from JSON correctly
+2. **Add expandable code blocks** - Default to truncated, show expand button
+3. **Debug filters** - Ensure filterTable() works correctly
+4. **Fix data structure** - Use timestamped directories for each run
+5. **Update publish workflow** - Save to versioned folders

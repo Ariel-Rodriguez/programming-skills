@@ -22,6 +22,7 @@ class Provider(Enum):
     """AI model providers"""
     OLLAMA = "ollama"
     COPILOT = "copilot"
+    CODEX = "codex"
 
 
 @dataclass(frozen=True)

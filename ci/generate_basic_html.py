@@ -5,76 +5,20 @@ Generates a Bootstrap-styled HTML page from benchmark data.
 This is a pure function - no side effects.
 """
 
-import json
 from pathlib import Path
-from typing import Any
 
 
-def generate_html_page(data: dict) -> str:
+def generate_html_page(data_src: str, script_src: str) -> str:
     """
     Generate HTML page from benchmark data.
 
     Args:
-        data: Aggregated benchmark data
+        data_src: Relative path to benchmark JSON
+        script_src: Relative path to app.js
 
     Returns:
         HTML string
     """
-    summary = data.get('summary', {})
-    benchmarks = data.get('benchmarks', [])
-    unique_skills = data.get('unique_skills', [])
-    provider_models = data.get('provider_models', [])
-
-    # Build provider/model options
-    provider_options = ""
-    seen_providers = set()
-    for prov, model in provider_models:
-        if prov not in seen_providers:
-            provider_options += f'<option value="{prov}">{prov.capitalize()}</option>'
-            seen_providers.add(prov)
-
-    # Build skill rows
-    skill_rows = ""
-    for benchmark in benchmarks:
-        for skill in benchmark.get('skills', []):
-            skill_name = skill.get('skill_name', 'unknown')
-            provider = skill.get('provider', 'unknown')
-            model = skill.get('model', 'unknown')
-            baseline_rating = skill.get('baseline_rating', 'vague')
-            skill_rating = skill.get('skill_rating', 'vague')
-            improvement = skill.get('improvement', 'neutral')
-            before_code = skill.get('before_code', '// No code generated')
-            after_code = skill.get('after_code', '// No code generated')
-            reasoning = skill.get('reasoning', 'No reasoning')
-
-            # Get rating colors
-            baseline_color = get_rating_color(baseline_rating)
-            skill_color = get_rating_color(skill_rating)
-
-            # Escape code for HTML
-            before_code_escaped = escape_html(before_code)
-            after_code_escaped = escape_html(after_code)
-
-            # Format reasoning for HTML
-            reasoning_formatted = format_reasoning(reasoning)
-
-            skill_rows += f'''
-            <tr>
-                <td>{skill_name}</td>
-                <td>{provider.capitalize()}</td>
-                <td>{model}</td>
-                <td><span class="badge bg-{baseline_color}">{baseline_rating}</span></td>
-                <td><span class="badge bg-{skill_color}">{skill_rating}</span></td>
-                <td><span class="badge bg-{get_improvement_color(improvement)}">{improvement.capitalize()}</span></td>
-                <td><button class="btn btn-sm btn-primary" onclick="showDetails({json.dumps(skill)})">View</button></td>
-            </tr>
-            '''
-
-    # Build unique skills filter options
-    skills_filter = '<option value="">All Skills</option>'
-    for skill_name in unique_skills:
-        skills_filter += f'<option value="{skill_name}">{skill_name}</option>'
-
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -82,6 +26,7 @@ def generate_html_page(data: dict) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Programming Skills Benchmarks</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <style>
         .code-container {{
             background-color: #f8f9fa;
@@ -89,6 +34,10 @@ def generate_html_page(data: dict) -> str:
             padding: 10px;
             max-height: 300px;
             overflow-y: auto;
+            border: 1px solid #dee2e6;
+        }}
+        .code-container.expanded {{
+            max-height: none;
         }}
         .rating-badge {{
             font-size: 0.9em;
@@ -125,7 +74,7 @@ def generate_html_page(data: dict) -> str:
         }}
     </style>
 </head>
-<body>
+<body data-benchmarks-src="{data_src}">
     <!-- Header -->
     <nav class="navbar navbar-dark bg-dark">
         <div class="container">
@@ -135,18 +84,18 @@ def generate_html_page(data: dict) -> str:
                 </svg>
                 Programming Skills Benchmarks
             </span>
-            <button class="btn btn-sm btn-outline-light" onclick="refreshData()">Refresh</button>
+            <button class="btn btn-sm btn-outline-light" onclick="refreshDashboard()">Refresh</button>
         </div>
     </nav>
 
     <!-- Summary Cards -->
     <div class="container mt-4">
-        <div class="row">
+        <div class="row" id="summary-cards">
             <div class="col-md-3">
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Total Benchmarks</h5>
-                        <h2 class="card-text">{summary.get('total_benchmarks', 0)}</h2>
+                        <h2 class="card-text" id="summary-total-benchmarks">0</h2>
                     </div>
                 </div>
             </div>
@@ -154,7 +103,7 @@ def generate_html_page(data: dict) -> str:
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Skills Tested</h5>
-                        <h2 class="card-text">{summary.get('total_skills', 0)}</h2>
+                        <h2 class="card-text" id="summary-total-skills">0</h2>
                     </div>
                 </div>
             </div>
@@ -162,7 +111,7 @@ def generate_html_page(data: dict) -> str:
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Improvements</h5>
-                        <h2 class="card-text text-success">{summary.get('improvements', 0)}</h2>
+                        <h2 class="card-text text-success" id="summary-improvements">0</h2>
                     </div>
                 </div>
             </div>
@@ -170,7 +119,7 @@ def generate_html_page(data: dict) -> str:
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Improvement Rate</h5>
-                        <h2 class="card-text">{summary.get('improvement_rate', 0)}%</h2>
+                        <h2 class="card-text" id="summary-improvement-rate">0%</h2>
                     </div>
                 </div>
             </div>
@@ -184,20 +133,18 @@ def generate_html_page(data: dict) -> str:
                 <label class="form-label fw-bold">Provider</label>
                 <select class="form-select" id="filter-provider" onchange="filterTable()">
                     <option value="">All Providers</option>
-                    {provider_options}
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-bold">Model</label>
                 <select class="form-select" id="filter-model" onchange="filterTable()">
                     <option value="">All Models</option>
-                    {"".join(f'<option value="{prov} {mdl}">{prov.capitalize()} - {mdl}</option>' for prov, mdl in provider_models)}
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-bold">Skill</label>
                 <select class="form-select" id="filter-skill" onchange="filterTable()">
-                    {skills_filter}
+                    <option value="">All Skills</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -233,7 +180,6 @@ def generate_html_page(data: dict) -> str:
                             </tr>
                         </thead>
                         <tbody id="skills-table-body">
-                            {skill_rows}
                         </tbody>
                     </table>
                 </div>
@@ -250,8 +196,40 @@ def generate_html_page(data: dict) -> str:
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div id="modal-content">
-                        <!-- Populated by JS -->
+                    <div class="judgment-box">
+                        <h6>Judge Assessment</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Before (Baseline):</strong> <span id="modal-before-rating"></span></p>
+                                <p><strong>After (With Skill):</strong> <span id="modal-after-rating"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Overall Better:</strong> <span id="modal-better"></span></p>
+                                <p><strong>Judge Score:</strong> <span id="modal-score"></span>/100</p>
+                            </div>
+                        </div>
+                        <hr>
+                        <div><strong>Reasoning:</strong> <div id="modal-reasoning"></div></div>
+                    </div>
+
+                    <div class="code-comparison">
+                        <h6>Code Comparison</h6>
+
+                        <div class="code-section">
+                            <h7>Before (Baseline) <small class="text-muted">Click to expand</small></h7>
+                            <div class="code-container" id="modal-before-code">
+                                <pre><code class="language-javascript" id="code-before"></code></pre>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="toggleExpand('modal-before-code', this)">Expand</button>
+                        </div>
+
+                        <div class="code-section">
+                            <h7>After (With Skill) <small class="text-muted">Click to expand</small></h7>
+                            <div class="code-container" id="modal-after-code">
+                                <pre><code class="language-javascript" id="code-after"></code></pre>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="toggleExpand('modal-after-code', this)">Expand</button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -263,161 +241,15 @@ def generate_html_page(data: dict) -> str:
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Custom JS -->
-    <script>
-        // Data loaded from external JSON
-        let allData = {json.dumps(data, indent=2)};
-
-        function getRatingColor(rating) {{
-            const colors = {{
-                'vague': 'secondary',
-                'regular': 'warning',
-                'good': 'primary',
-                'outstanding': 'success'
-            }};
-            return colors[rating] || 'secondary';
-        }}
-
-        function getImprovementColor(improvement) {{
-            const colors = {{
-                'yes': 'success',
-                'no': 'danger',
-                'neutral': 'secondary'
-            }};
-            return colors[improvement] || 'secondary';
-        }}
-
-        function escapeHtml(text) {{
-            if (!text) return '';
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }}
-
-        function formatReasoning(reasoning) {{
-            return reasoning.replace(/\\n/g, '<br>');
-        }}
-
-        function showDetails(skill) {{
-            const modalTitle = document.getElementById('detailModalTitle');
-            const modalContent = document.getElementById('modal-content');
-
-            modalTitle.textContent = `Details: ${{
-                skill.skill_name || 'Unknown Skill'
-            }}`;
-
-            const judgment = skill.judgment || {{
-                'option_a_rating': 'vague',
-                'option_b_rating': 'vague',
-                'overall_better': 'Equal',
-                'reasoning': 'No judgment available'
-            }};
-
-            const judgmentBox = `<div class="judgment-box">
-                <h6>Judge Assessment</h6>
-                <p><strong>Before (Baseline):</strong> ${{
-                    judgment.option_a_rating || 'vague'
-                }}</p>
-                <p><strong>After (With Skill):</strong> ${{
-                    judgment.option_b_rating || 'vague'
-                }}</p>
-                <p><strong>Overall Better:</strong> ${{
-                    judgment.overall_better || 'Equal'
-                }}</p>
-                <hr>
-                <p><strong>Reasoning:</strong></p>
-                <div>${{
-                    formatReasoning(skill.reasoning || 'No reasoning')
-                }}</div>
-            </div>`;
-
-            const codeComparison = `<div class="code-comparison">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="code-section">
-                            <h7>Before (Baseline)</h7>
-                            <div class="code-container">
-                                <pre><code>${{
-                                    escapeHtml(skill.before_code || '// No code generated')
-                                }}</code></pre>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="code-section">
-                            <h7>After (With Skill)</h7>
-                            <div class="code-container">
-                                <pre><code>${{
-                                    escapeHtml(skill.after_code || '// No code generated')
-                                }}</code></pre>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-
-            modalContent.innerHTML = judgmentBox + codeComparison;
-
-            const modal = new bootstrap.Modal(document.getElementById('detailModal'));
-            modal.show();
-        }}
-
-        function filterTable() {{
-            const provider = document.getElementById('filter-provider').value.toLowerCase();
-            const model = document.getElementById('filter-model').value.toLowerCase();
-            const skill = document.getElementById('filter-skill').value.toLowerCase();
-            const improvement = document.getElementById('filter-improvement').value.toLowerCase();
-
-            const rows = document.querySelectorAll('#skills-table-body tr');
-            let visibleCount = 0;
-
-            rows.forEach(row => {{
-                const cells = row.cells;
-                const rowProvider = cells[1].textContent.toLowerCase();
-                const rowModel = cells[2].textContent.toLowerCase();
-                const rowSkill = cells[0].textContent.toLowerCase();
-                const rowImprovement = cells[5].textContent.toLowerCase();
-
-                const matchProvider = !provider || rowProvider.includes(provider);
-                const matchModel = !model || rowModel.includes(model);
-                const matchSkill = !skill || rowSkill.includes(skill);
-                const matchImprovement = !improvement || rowImprovement.includes(improvement);
-
-                if (matchProvider && matchModel && matchSkill && matchImprovement) {{
-                    row.style.display = '';
-                    visibleCount++;
-                }} else {{
-                    row.style.display = 'none';
-                }}
-            }});
-
-            console.log(`Showing ${{
-                visibleCount
-            }} skills`);
-        }}
-
-        function refreshData() {{
-            // Reload the page to get fresh data
-            window.location.reload();
-        }}
-
-        // Initial table render
-        document.addEventListener('DOMContentLoaded', function() {{
-            console.log('Benchmarks loaded:', allData.benchmarks.length, 'benchmarks');
-            console.log('Total skills:', allData.summary.total_skills);
-        }});
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
+    <script src="{script_src}"></script>
 </body>
 </html>'''
 
     return html
 
 
-def generate_basic_html(input_file: Path, output_file: Path) -> bool:
+def generate_basic_html(input_file: Path, output_file: Path, data_src: str = "benchmarks.json", script_src: str = "scripts/app.js") -> bool:
     """
     Main function: Generate HTML page from benchmark JSON.
 
@@ -431,12 +263,8 @@ def generate_basic_html(input_file: Path, output_file: Path) -> bool:
         True if successful, False otherwise
     """
     try:
-        # Read input
-        with open(input_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
         # Generate HTML
-        html = generate_html_page(data)
+        html = generate_html_page(data_src, script_src)
 
         # Write output
         output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -457,8 +285,8 @@ if __name__ == "__main__":
     import sys
 
     # Default paths
-    input_file = Path("docs/benchmarks.json")
-    output_file = Path("docs/index.html")
+    input_file = Path("docs/benchmarks/benchmarks.json")
+    output_file = Path("docs/benchmarks/index.html")
 
     # Allow command line overrides
     if len(sys.argv) > 1:
