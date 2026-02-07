@@ -115,7 +115,12 @@ def build_skill_instruction(skill_content: str) -> str:
     from .skill_extraction import extract_skill_guidance
     
     focused_guidance = extract_skill_guidance(skill_content)
-    return f"Apply the following programming skill:\n\n{focused_guidance}\n\n"
+    return (
+        "You are given the skill guidance below. It is loaded and available. "
+        "Do not claim the skill is missing.\n\n"
+        "Apply the following programming skill:\n\n"
+        f"{focused_guidance}\n\n"
+    )
 
 def get_rating_label(pass_rate: int) -> str:
     """

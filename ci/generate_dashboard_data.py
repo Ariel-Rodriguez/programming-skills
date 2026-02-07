@@ -187,17 +187,20 @@ def collect_all_benchmarks(history_dir: Path) -> list[dict]:
         test_results = data.get('results', [])
         before_code, after_code = extract_code_from_test_results(test_results, provider)
 
-        improvement = data.get('improvement')
-        if improvement is None:
-            overall_better = judgment.get('overall_better', 'Equal')
+        overall_better = judgment.get('overall_better') if judgment else None
+        if overall_better in ('A', 'B', 'Equal'):
             if overall_better == 'B':
                 improvement = 'yes'
             elif overall_better == 'A':
                 improvement = 'no'
             else:
                 improvement = 'neutral'
-        elif isinstance(improvement, (int, float)):
-            improvement = 'yes' if improvement > 0 else ('no' if improvement < 0 else 'neutral')
+        else:
+            improvement = data.get('improvement')
+            if isinstance(improvement, (int, float)):
+                improvement = 'yes' if improvement > 0 else ('no' if improvement < 0 else 'neutral')
+            elif improvement is None:
+                improvement = 'neutral'
 
         skill_data = {
             'skill_name': skill_name,

@@ -119,6 +119,15 @@ Projects can customize the prompt by:
 
 Place customizations in `.ai-code-culture.md` in your project root.
 
+## Skills Integration Guide
+
+Reference:
+
+```
+https://agentskills.io/integrate-skills
+https://agentskills.io/llms.txt
+```
+
 ## Version Information
 
 - **Current:** v2.2.0 - Severity-based skills with automated benchmarking.
