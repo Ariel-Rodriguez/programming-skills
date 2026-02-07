@@ -1,0 +1,51 @@
+{
+  "skill": "ps-composition-over-coordination",
+  "severity": "SUGGEST",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_orchestrator_class",
+      "baseline": {
+        "pass": true,
+        "response_preview": "```javascript\nconst buildContext = (services, request) => ({\n  request,\n  services,\n  session: null,...",
+        "response_full": "```javascript\nconst buildContext = (services, request) => ({\n  request,\n  services,\n  session: null,\n  transaction: null,\n  result: null,\n});\n\n/** Step: authenticate token */\nconst authenticateStep = async (ctx) => {\n  const session = await ctx.services.authService.getSession(ctx.request.token);\n  if (!session?.isValid) {\n    throw new Error(\"Unauthorized\");\n  }\n  return { ...ctx, session };\n};\n\n/** Step: validate payment details */\nconst validateStep = (ctx) => {\n  const { amount, currency } = ctx.request;\n  if (!amount || amount <= 0) {\n    throw new Error(\"Invalid amount\");\n  }\n  if (currency !== \"USD\") {\n    throw new Error(\"Only USD supported\");\n  }\n  return ctx;\n};\n\n/** Step: risk profiling */\nconst riskStep = async (ctx) => {\n  const [riskScore] = await ctx.services.db.query(\n    \"SELECT score FROM risk_profiles WHERE user_id = ?\",\n    ctx.session.userId\n  );\n  if (riskScore > 80) {\n    throw new Error(\"High risk transaction\");\n  }\n  return ctx;\n};\n\n/** Step: charge bank and audit failures */\nconst chargeStep = async (ctx) => {\n  const transaction = await ctx.services.bankApi.charge({\n    card: ctx.request.cardNumber,\n    amount: ctx.request.amount,\n    ref: `TXN-${Date.now()}`,\n  });\n\n  if (transaction.status !== \"success\") {\n    await ctx.services.db.execute(\n      \"INSERT INTO audit_logs (event, status) VALUES (?, ?)\",\n      [\"payment_failed\", transaction.errorMessage]\n    );\n    throw new Error(`Bank error: ${transaction.errorMessage}`);\n  }\n\n  return { ...ctx, transaction };\n};\n\n/** Step: persist ledger entries */\nconst persistStep = async (ctx) => {\n  const { session, transaction, request } = ctx;\n  await ctx.services.db.execute(\n    \"UPDATE accounts SET balance = balance - ? WHERE user_id = ?\",\n    [request.amount, session.userId]\n  );\n  await ctx.services.db.execute(\n    \"INSERT INTO transactions (id, user_id, amount) VALUES (?, ?, ?)\",\n    [transaction.id, session.userId, request.amount]\n  );\n  return {\n    ...ctx,\n    result: {\n      success: true,\n      transactionId: transaction.id,\n    },\n  };\n};\n\n/** Step: notify user */\nconst notifyStep = async (ctx) => {\n  await ctx.services.emailService.send(\n    ctx.session.email,\n    \"Payment Successful\",\n    `You charged $${ctx.request.amount}`\n  );\n  return ctx;\n};\n\nconst paymentFlow = [\n  authenticateStep,\n  validateStep,\n  riskStep,\n  chargeStep,\n  persistStep,\n  notifyStep,\n];\n\nconst executeFlow = async (steps, ctx) => {\n  let current = ctx;\n  for (const step of steps) {\n    current = await step(current);\n  }\n  return current;\n};\n\nclass PaymentProcessor {\n  constructor(authService, db, bankApi, emailService) {\n    this.services = { authService, db, bankApi, emailService };\n  }\n\n  async processPayment(request) {\n    const ctx = buildContext(this.services, request);\n    const finalContext = await executeFlow(paymentFlow, ctx);\n    return finalContext.result;\n  }\n}\n```"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Applied the Core Principle skill to break the god-object into composable units that each handle one ...",
+        "response_full": "Applied the Core Principle skill to break the god-object into composable units that each handle one responsibility, wiring them together through coordination-free flow.\n\n```javascript\nasync function authenticate(authService, token) {\n    const session = await authService.getSession(token);\n    if (!session || !session.isValid) {\n        throw new Error(\"Unauthorized\");\n    }\n    return session;\n}\n\nfunction validateRequest({ amount, currency }) {\n    if (!amount || amount <= 0) {\n        throw new Error(\"Invalid amount\");\n    }\n    if (!currency || currency !== \"USD\") {\n        throw new Error(\"Only USD supported\");\n    }\n}\n\nasync function assessRisk(db, userId) {\n    const riskScore = await db.query(\"SELECT score FROM risk_profiles WHERE user_id = ?\", userId);\n    if (riskScore > 80) {\n        throw new Error(\"High risk transaction\");\n    }\n}\n\nasync function performCharge(bankApi, request) {\n    const transaction = await bankApi.charge({\n        card: request.cardNumber,\n        amount: request.amount,\n        ref: `TXN-${Date.now()}`\n    });\n\n    if (transaction.status !== \"success\") {\n        throw new Error({ type: \"BankError\", message: transaction.errorMessage });\n    }\n\n    return transaction;\n}\n\nasync function recordFailure(db, errorMessage) {\n    await db.execute(\"INSERT INTO audit_logs (event, status) VALUES (?, ?)\", [\"payment_failed\", errorMessage]);\n}\n\nasync function recordSuccess(db, userId, amount, transactionId) {\n    await db.execute(\"UPDATE accounts SET balance = balance - ? WHERE user_id = ?\", [amount, userId]);\n    await db.execute(\"INSERT INTO transactions (id, user_id, amount) VALUES (?, ?, ?)\", [transactionId, userId, amount]);\n}\n\nasync function notifyUser(emailService, email, amount) {\n    await emailService.send(email, \"Payment Successful\", `You charged $${amount}`);\n}\n\nclass PaymentProcessor {\n    constructor(authService, db, bankApi, emailService) {\n        this.authService = authService;\n        this.db = db;\n        this.bankApi = bankApi;\n        this.emailService = emailService;\n    }\n\n    async processPayment(request) {\n        const session = await authenticate(this.authService, request.token);\n        validateRequest(request);\n        await assessRisk(this.db, session.userId);\n\n        let transaction;\n        try {\n            transaction = await performCharge(this.bankApi, request);\n        } catch (error) {\n            if (error.message && error.message.type === \"BankError\") {\n                await recordFailure(this.db, error.message.message);\n                throw new Error(`Bank error: ${error.message.message}`);\n            }\n            throw error;\n        }\n\n        await recordSuccess(this.db, session.userId, request.amount, transaction.id);\n        await notifyUser(this.emailService, session.email, request.amount);\n\n        return {\n            success: true,\n            transactionId: transaction.id\n        };\n    }\n}\n```"
+      }
+    },
+    {
+      "name": "identify_coordination_bottleneck",
+      "baseline": {
+        "pass": true,
+        "response_preview": "A single `Manager` class that encapsulates the core logic for three distinct subsystems becomes a co...",
+        "response_full": "A single `Manager` class that encapsulates the core logic for three distinct subsystems becomes a coordination bottleneck because it centralizes responsibility, which violates the Single Responsibility Principle (SRP) and obscures subsystem boundaries. Every change to any subsystem must flow through that manager, increasing coupling (tight dependencies between otherwise independent components), which in turn hinders parallel development and scalability. The manager also becomes a communication choke point: it must know the details of each subsystem\u2019s interface, violating the Interface Segregation Principle and reducing encapsulation.\n\nFrom a design standpoint, this setup prevents the application of the Dependency Inversion Principle, because higher-level policies about subsystem interaction are mixed with low-level subsystem behavior; as a result, changes ripple through the manager instead of being localized within subsystem modules. The Observer or Mediator patterns are better suited for coordination\u2014they let subsystems interact through well-defined contracts without a single class monopolizing control flow. Decomposing responsibilities into domain-specific classes and using explicit coordination interfaces improves maintainability, testability, and runtime throughput, avoiding the bottleneck that a monolithic `Manager` would introduce."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "A \u201cManager\u201d class that houses the logic for three different subsystems breaks the Core Principle you...",
+        "response_full": "A \u201cManager\u201d class that houses the logic for three different subsystems breaks the Core Principle you were given because it centralizes coordination instead of composing behavior from focused units. It will inevitably know too much about each subsystem, contain procedural flows and conditional routing, and become hard to test. Design principles like Single Responsibility (each unit should have one clear job) and Dependency Inversion (higher-level modules shouldn\u2019t depend on concrete implementations) are violated: the manager entwines subsystems instead of exposing small functions or interfaces, preventing reuse or replacement. Instead, let each subsystem expose a simple operation, and build pipelines at the outer layer where needed\u2014this keeps behavior emergent from structure rather than hidden in a coordinator."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A breaks the work into named steps but still relies on a centralized orchestrator and a context object, so it only meets the principle at a basic level. Solution B exposes small focused functions for each concern and composes them through a clear, sequential flow in `processPayment`, making the structure simpler to understand, test, and extend. That compositional clarity is why B better demonstrates the principle and delivers higher maintainability."
+  },
+  "timestamp": "2026-02-07T18:18:13",
+  "provider": "codex"
+}

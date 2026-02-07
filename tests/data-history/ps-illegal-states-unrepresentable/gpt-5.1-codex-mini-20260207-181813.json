@@ -1,0 +1,51 @@
+{
+  "skill": "ps-illegal-states-unrepresentable",
+  "severity": "SUGGEST",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "transform_invalid_state",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Use a discriminated union so each branch only has the fields it needs:\n\n```ts\ntype Response =\n  | { ...",
+        "response_full": "Use a discriminated union so each branch only has the fields it needs:\n\n```ts\ntype Response =\n  | { status: 'success'; data: any }\n  | { status: 'error'; errorMessage: string };\n```"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Applying the Core Principle skill to forbid illegal combinations, the `Response` type becomes a disc...",
+        "response_full": "Applying the Core Principle skill to forbid illegal combinations, the `Response` type becomes a discriminated union so success and error states carry exactly the fields they need:\n\n```ts\ntype Response =\n  | { status: 'success'; data: any }\n  | { status: 'error'; errorMessage: string };\n```\n\nNow the compiler ensures you can\u2019t have a success with an error message or vice versa."
+      }
+    },
+    {
+      "name": "explain_parse_dont_validate",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Validating data is the process of checking incoming input against rules\u2014format, ranges, required fie...",
+        "response_full": "Validating data is the process of checking incoming input against rules\u2014format, ranges, required fields\u2014so you can reject or flag anything that could lead to an illegal state later. Parsing data into domain types happens after or alongside validation: it transforms that already-validated input into richer, strongly typed structures (e.g., enums, domain objects) so that the rest of the program can\u2019t even express invalid combinations. In short, validation filters or rejects bad data, while parsing into domain types encodes the remaining good data so the type system itself prevents illegal states."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Validating data means checking at runtime whether arbitrary inputs satisfy the rules you expect\u2014you'...",
+        "response_full": "Validating data means checking at runtime whether arbitrary inputs satisfy the rules you expect\u2014you're still accepting raw mutable structures and then running guards to detect illegal combinations, so invalid states can still be constructed and cause bugs if checks are missed. Parsing into domain types, by contrast, means you immediately convert raw input into carefully designed types (e.g., discriminated unions or enums) that only allow legal states; once parsed, any value of that type is guaranteed to be valid, so the rest of the program can\u2019t even express or depend on invalid combinations."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B better articulates how the discriminated union enforces valid states by construction and contrasts parsing into domain types versus loose runtime validation, so it more fully embodies the core principle. Solution A shows the same type but stops short of drawing the same conclusions, making it a basic compliance while B offers clearer guidance that supports maintainability and correctness."
+  },
+  "timestamp": "2026-02-07T18:18:13",
+  "provider": "codex"
+}

@@ -1,0 +1,51 @@
+{
+  "skill": "ps-error-handling-design",
+  "severity": "WARN",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_swallowed_error",
+      "baseline": {
+        "pass": true,
+        "response_preview": "```\nfunction saveUser(user) {\n  try {\n    db.insert(user);\n  } catch (error) {\n    console.error('Fa...",
+        "response_full": "```\nfunction saveUser(user) {\n  try {\n    db.insert(user);\n  } catch (error) {\n    console.error('Failed to save user', { userId: user?.id, error });\n    throw new Error('Unable to persist user');\n  }\n}\n```\nThis keeps the caller informed of failure, logs the original error for diagnostics, and avoids swallowing exceptions."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Save operation should surface errors via return value instead of swallowing them. For example:\n\n```\n...",
+        "response_full": "Save operation should surface errors via return value instead of swallowing them. For example:\n\n```\nconst saveUser = (user) => {\n  const result = db.insert(user);\n  if (result.isSuccess()) {\n    return { success: true };\n  }\n  return { success: false, error: { type: \"Infrastructure\", message: \"Insert failed\", context: user } };\n};\n```\n\nNow callers must inspect `success` before proceeding, respecting explicit error handling without relying on exceptions."
+      }
+    },
+    {
+      "name": "design_validation_flow",
+      "baseline": {
+        "pass": true,
+        "response_preview": "**Registration Flow**\n\n- **Input validation:** Immediately validate the email format (e.g., regex or...",
+        "response_full": "**Registration Flow**\n\n- **Input validation:** Immediately validate the email format (e.g., regex or dedicated validator) and reject with a specific \u201cInvalid email address\u201d error message before touching persistence.\n\n- **Process steps:**  \n  1. Receive email/password data.  \n  2. Run sanitization/validation (email, password strength).  \n  3. If validation fails, return \u201cInvalid email address\u201d response with guidance.  \n  4. If valid, attempt to open a database connection inside a try/catch.\n\n- **Database failure handling:** Wrap connection + write in a retry-aware block; on connection failure, log the error (with correlation ID) and return a \u201cRegistration temporarily unavailable; please try again later\u201d status, exposing no internal details.\n\n- **Existing user check:** After connection, query for the email in a transactional manner. If a user record exists, abort and return \u201cAn account with this email already exists\u201d so the client can prompt for login or password reset.\n\n- **Success path:** If no user exists and write succeeds, commit, issue a success response (e.g., 201 Created) with next steps (verification email sent).\n\n- **Monitoring:** Emit metrics/logs for validation failures, DB errors, and duplicate attempts to detect abuse/trends.\n\n- **User feedback:** All client-facing errors should be clear and actionable; log internal errors with stack and correlation ID for investigation while keeping user messages generic for infrastructure issues."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "**Registration Flow Design**  \n- Entry function `registerUser(request)` returns `Result<SuccessRespo...",
+        "response_full": "**Registration Flow Design**  \n- Entry function `registerUser(request)` returns `Result<SuccessResponse, RegistrationError>` so caller handles every failure path explicitly.  \n- Validate email: `validateEmail(email)` returns `Result<Email, ValidationError>`; invalid format yields `EmailInvalid` with hints so caller returns \u201cInvalid email\u201d response without proceeding.  \n- Database interaction: `saveNewUser(user)` returns `Result<UserId, DatabaseError>`; infrastructure failures (connection timeout, write error) map to `RegistrationError.DatabaseUnavailable` so UI can surface retry guidance while logging context.  \n- Duplicate check: `findUserByEmail(email)` returns `Result<User, NotFound>`. If user exists, `registerUser` immediately returns `RegistrationError.UserAlreadyExists` (domain error, graceful response).  \n- Error categories are distinguished (domain vs infrastructure) and surfaced through enums/ADTs; programming assumptions (e.g., `validateEmail` receiving non-string) are treated as non-recoverable and crash fast during development.  \n- Recovery strategy: validation and duplicate checks degrade gracefully with user-facing messages, but database failures propagate upward to retry/fallback logic so the system can decide whether to retry or escalate."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution A still relies on exceptions thrown during the save path and only discusses handling via logs and responses, so its explicit error handling is partial and leaves domain contracts implicit, earning a regular rating. Solution B encodes every expected failure in Result types with clear distinction between domain/infrastructure errors, making error handling explicit and discoverable, thus outstanding. Because B surfaces errors through types it offers stronger principle adherence and greater maintainability, so it wins both the principle and overall quality comparisons."
+  },
+  "timestamp": "2026-02-07T18:18:13",
+  "provider": "codex"
+}

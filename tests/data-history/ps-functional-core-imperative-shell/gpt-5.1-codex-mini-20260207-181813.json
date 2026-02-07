@@ -1,0 +1,51 @@
+{
+  "skill": "ps-functional-core-imperative-shell",
+  "severity": "BLOCK",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_mixed_logic",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Extract the validation/stock math into a pure function and let `updateStock` stay as the imperative ...",
+        "response_full": "Extract the validation/stock math into a pure function and let `updateStock` stay as the imperative shell that talks to the database:\n\n```javascript\nconst calculateRemainingStock = (stock, soldQuantity) => {\n    if (stock < soldQuantity) {\n        throw new Error('Insufficient stock');\n    }\n    return stock - soldQuantity;\n};\n\nfunction updateStock(productId, soldQuantity) {\n    const product = db.query('SELECT * FROM products WHERE id = ?', productId);\n    const newStock = calculateRemainingStock(product.stock, soldQuantity);\n    db.execute('UPDATE products SET stock = ? WHERE id = ?', [newStock, productId]);\n    return newStock;\n}\n```\n\n`calculateRemainingStock` is the functional core (pure, testable logic), while `updateStock` remains the imperative shell handling DB side effects and wiring the pieces together."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Split the logic into a pure core that computes the new stock and a thin shell that performs the data...",
+        "response_full": "Split the logic into a pure core that computes the new stock and a thin shell that performs the database effects. For example:\n\n```javascript\nfunction computeNewStock(currentStock, soldQuantity) {\n    if (soldQuantity > currentStock) {\n        throw new Error('Insufficient stock');\n    }\n    return currentStock - soldQuantity;\n}\n```\n\nand then have the imperative shell:\n\n```javascript\nfunction updateStock(productId, soldQuantity) {\n    const product = db.query('SELECT * FROM products WHERE id = ?', productId);\n    const newStock = computeNewStock(product.stock, soldQuantity);\n    db.execute('UPDATE products SET stock = ? WHERE id = ?', [newStock, productId]);\n    return newStock;\n}\n```\n\nThe shell loads from the database, calls the pure function, and writes the update, while the core contains only deterministic computation."
+      }
+    },
+    {
+      "name": "identify_side_effects",
+      "baseline": {
+        "pass": true,
+        "response_preview": "The function has two side effects: it logs an error via `console.error` when validation fails and it...",
+        "response_full": "The function has two side effects: it logs an error via `console.error` when validation fails and it calls `logger.info` on success. These mutate external state (console output and whatever `logger` does), so the function isn\u2019t pure. Functional Core principle says the core logic should be pure and free of side effects; side effects should be handled by a surrounding imperative shell. Here the validation logic is mixed with logging, so the \u201ccore\u201d can\u2019t be reasoned about or tested independently and violates the principle."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "The side effects here are the `console.error('Invalid email')` call and the `logger.info('User valid...",
+        "response_full": "The side effects here are the `console.error('Invalid email')` call and the `logger.info('User validated')` call: both emit log output and depend on external logging infrastructure, so they alter the outside world rather than just returning a value. Because the Functional Core / Imperative Shell principle demands that the core validation logic remain deterministic\u2014accepting `user` and returning a true/false answer\u2014any logging (which touches IO/state) must be moved out into the shell that orchestrates effects after the pure core returns its result."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution A separates the computation but then mixes logging side effects into what it presents as the core, so it only partially follows the functional-core rule; Solution B keeps the calculation pure and confines effects to the shell, making it easier to test and reason about. Solution B therefore better demonstrates the principle and offers higher maintainability/testability, so it wins overall."
+  },
+  "timestamp": "2026-02-07T18:18:13",
+  "provider": "codex"
+}

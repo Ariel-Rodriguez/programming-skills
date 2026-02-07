@@ -1,0 +1,51 @@
+{
+  "skill": "ps-explicit-ownership-lifecycle",
+  "severity": "WARN",
+  "model": "gpt-5.1-codex-mini",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "refactor_leaky_file_handle",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Wrap the lifetime of the file handle in a `try\u2026finally` so the descriptor is always closed, and hand...",
+        "response_full": "Wrap the lifetime of the file handle in a `try\u2026finally` so the descriptor is always closed, and handle errors around the write step:\n\n```javascript\nfunction logMessage(filePath, message) {\n    const file = fs.openSync(filePath, 'a');\n    try {\n        fs.writeSync(file, message + '\\n');\n    } finally {\n        fs.closeSync(file);\n    }\n}\n```"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Refactor to make the file descriptor\u2019s ownership explicit and guarantee cleanup via a `try/finally` ...",
+        "response_full": "Refactor to make the file descriptor\u2019s ownership explicit and guarantee cleanup via a `try/finally` block so it always closes even on errors:\n\n```javascript\nfunction logMessage(filePath, message) {\n    const file = fs.openSync(filePath, 'a'); // file is owned here\n    try {\n        fs.writeSync(file, message + '\\n');\n    } finally {\n        fs.closeSync(file); // deterministic release in reverse order\n    }\n}\n```\n\nThis keeps the file\u2019s lifecycle bound to the function scope, documents ownership in the comments, and uses deterministic cleanup rather than relying on the caller or GC."
+      }
+    },
+    {
+      "name": "design_subscription_owner",
+      "baseline": {
+        "pass": true,
+        "response_preview": "Used skill `ps-explicit-ownership-lifecycle` to keep resource ownership explicit.  \n\nA `Component` o...",
+        "response_full": "Used skill `ps-explicit-ownership-lifecycle` to keep resource ownership explicit.  \n\nA `Component` owns the event-bus subscription handle it creates and is responsible for its lifecycle. In practice:\n\n```\nclass Component {\n  constructor(eventBus) {\n    this.eventBus = eventBus;\n    this.subscription = this.eventBus.subscribe(\"topic\", this.handleEvent);\n  }\n\n  handleEvent(event) {\n    // business logic\n  }\n\n  dispose() {\n    if (this.subscription) {\n      this.subscription.unsubscribe();\n      this.subscription = null;\n    }\n  }\n}\n```\n\nThe constructor acquires the subscription, stores it on the component instance, and the `dispose()`/destructor method deterministically releases it. Callers must invoke `dispose()` whenever the component is destroyed so the subscription can\u2019t outlive the component, satisfying Explicit Ownership Lifecycle."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Component owns its subscription and releases it deterministically: instantiate the bus, subscribe in...",
+        "response_full": "Component owns its subscription and releases it deterministically: instantiate the bus, subscribe in the constructor, and always unsubscribe in `dispose()` (or destructor/`finalize` equivalent), with the component responsible for invoking `dispose()` when it\u2019s no longer needed. Example:\n\n```ts\nclass Component {\n  private readonly subscription: Subscription;\n\n  constructor(private readonly bus: EventBus) {\n    this.subscription = bus.subscribe(this.handleEvent); // ownership acquired\n  }\n\n  private handleEvent = (evt: Event) => {\n    // handle event\n  };\n\n  dispose() {\n    this.subscription.unsubscribe(); // deterministic cleanup\n  }\n}\n```\n\nBecause `Component` stores only the subscription it created, the Single Owner Rule holds: no other caller can close it, and `dispose()` always runs before the component is dropped, keeping the event bus subscription from outliving the component."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution B makes ownership explicit with readonly/private fields, captures the handler via a bound arrow function, and relies solely on the component to unsubscribe, so its lifecycle claims are cleaner than A\u2019s more ad-hoc disposal logic; that extra precision earns it outstanding while A remains good. Consequently, B demonstrates the ownership principle more clearly and is more maintainable due to its tighter encapsulation of the subscription."
+  },
+  "timestamp": "2026-02-07T18:18:13",
+  "provider": "codex"
+}
