@@ -2,6 +2,33 @@ let allData = null;
 let flatSkills = [];
 let scrollSyncGuard = false;
 
+// ============================================================================
+// Explicit Ownership: ModalListenerManager
+// ============================================================================
+// Manages event listeners for modal content with explicit cleanup.
+// Ensures all listeners are removed when modal closes, preventing leaks.
+class ModalListenerManager {
+  constructor() {
+    this.listeners = [];
+  }
+
+  add(element, event, handler) {
+    if (!element) return;
+    element.addEventListener(event, handler);
+    this.listeners.push({ element, event, handler });
+  }
+
+  cleanup() {
+    this.listeners.forEach(({ element, event, handler }) => {
+      element.removeEventListener(event, handler);
+    });
+    this.listeners = [];
+  }
+}
+
+let modalListenerManager = new ModalListenerManager();
+
+
 function getDataSrc() {
   return document.body.dataset.benchmarksSrc || "benchmarks.json";
 }
@@ -202,14 +229,39 @@ function renderTable(benchmarks) {
         <td><button class="btn btn-sm btn-primary" data-skill-index="${index}">View</button></td>
       `;
 
-      const button = row.querySelector("button");
-      if (button) {
-        button.addEventListener("click", () => showDetails(index));
-      }
+      // Button clicks handled via event delegation in setupTableButtonDelegation()
 
       tbody.appendChild(row);
     });
   });
+  
+  // Setup delegated listener for buttons (explicit ownership pattern)
+  setupTableButtonDelegation();
+}
+
+
+// ============================================================================
+// Explicit Ownership: Table Button Event Delegation
+// ============================================================================
+// Uses event delegation to avoid creating listeners for every button.
+// Single listener on table body handles all clicks, preventing listener leaks.
+function setupTableButtonDelegation() {
+  const tbody = document.getElementById("skills-table-body");
+  if (!tbody) return;
+  
+  // Remove any previous delegation listener to prevent duplicates
+  tbody.removeEventListener("click", tableButtonClickHandler);
+  
+  // Add single delegated listener
+  tbody.addEventListener("click", tableButtonClickHandler);
+}
+
+function tableButtonClickHandler(event) {
+  const button = event.target.closest("button[data-skill-index]");
+  if (button) {
+    const index = parseInt(button.dataset.skillIndex, 10);
+    showDetails(index);
+  }
 }
 
 function filterTable() {
@@ -297,9 +349,20 @@ function showDetails(index) {
     const beforeContainer = document.getElementById("modal-before-code");
     const afterContainer = document.getElementById("modal-after-code");
     if (beforeContainer && afterContainer) {
-      beforeContainer.onscroll = () => syncScroll(beforeContainer, afterContainer);
-      afterContainer.onscroll = () => syncScroll(afterContainer, beforeContainer);
+      // Clean up previous modal listeners (explicit ownership)
+      modalListenerManager.cleanup();
+      
+      // Add new listeners with explicit ownership tracking
+      const scrollHandler1 = () => syncScroll(beforeContainer, afterContainer);
+      const scrollHandler2 = () => syncScroll(afterContainer, beforeContainer);
+      modalListenerManager.add(beforeContainer, 'scroll', scrollHandler1);
+      modalListenerManager.add(afterContainer, 'scroll', scrollHandler2);
     }
+    
+    // Cleanup listeners when modal is hidden
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      modalListenerManager.cleanup();
+    });
   }
 }
 

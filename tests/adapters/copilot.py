@@ -27,9 +27,14 @@ class CopilotCLIAdapter:
         # Try new copilot CLI first, fall back to gh extension
         # The standalone CLI has auth issues with PATs in CI (see: github/copilot-cli#355)
         # So we use gh copilot extension which works better with GITHUB_TOKEN
+        system_note = (
+            "Provide a direct final answer only. Do not list options. "
+            "You cannot edit files; this is a read-only sandbox."
+        )
+
         cmd_cli = [
-            "copilot", 
-            "-p", prompt,
+            "copilot",
+            "-p", system_note + "\n\n" + prompt,
             "--model", config.model_name,
             "--silent",
             "--yolo",
