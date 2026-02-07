@@ -71,8 +71,10 @@ jobs:
           ref: main
           path: trusted-scripts
 
-      # Checkout actual PR code to test
+      # Checkout actual PR code to test (to different path to avoid overwriting trusted-scripts)
       - uses: actions/checkout@v4
+        with:
+          path: pr-code
 
       - uses: actions/setup-node@v4
         if: matrix.provider == 'copilot'
@@ -100,10 +102,11 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
           TRULENS_OTEL_ENDPOINT: ${{ secrets.TRULENS_OTEL_ENDPOINT }}
+        working-directory: pr-code
         run: |
           # Construct arguments array for safety
           ARGS=(--provider "${{ matrix.provider }}" --model "${{ matrix.model }}" --judge --verbose --report --threshold 50)
-          
+
           if [ -n "${{ matrix.extra_args }}" ]; then
             # Split extra_args safely if needed, but for now assuming simple flags
             ARGS+=(${{ matrix.extra_args }})
@@ -116,15 +119,16 @@ jobs:
           fi
 
           echo "Running evaluation..."
-          # Use trusted script with correct project path
-          uv run --project . --frozen trusted-scripts/tests/evaluator.py "${ARGS[@]}"
+          # Run evaluator from trusted-scripts/tests
+          # The working-directory is pr-code, so evaluator.py finds PR code at current directory
+          uv run --project . --frozen ../trusted-scripts/tests/evaluator.py "${ARGS[@]}"
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: tests/results/
+          path: pr-code/tests/results/
           retention-days: 1
 
   consolidate:
@@ -141,14 +145,14 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: tests/results/
+          path: pr-code/tests/results/
 
       - name: Consolidate results
-        run: python3 trusted-scripts/ci/consolidate_results.py
+        run: python3 trusted-scripts/ci/consolidate_results.py --results-dir pr-code/tests/results --output-file pr-code/comment.md
 
       - name: Post to PR
         uses: marocchino/sticky-pull-request-comment@v2
-        if: hashFiles('comment.md') != ''
+        if: hashFiles('pr-code/comment.md') != ''
         with:
           number: ${{ github.event.issue.number }}
-          path: comment.md
+          path: pr-code/comment.md

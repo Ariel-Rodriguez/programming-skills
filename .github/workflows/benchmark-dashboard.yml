@@ -53,6 +53,17 @@ jobs:
             ARTIFACT_NAME="benchmark-${{ inputs.provider }}-${{ inputs.model }}-$(date +%Y%m%d-%H%M%S)"
             mv tests/results "tests/${ARTIFACT_NAME}"
           fi
+          # Create docs/benchmarks if it doesn't exist for publish_benchmarks.py
+          mkdir -p docs/benchmarks
+
+      - name: Generate dashboard
+        working-directory: workspace
+        run: |
+          uv run --project tests python3 ci/publish_benchmarks.py \
+            --provider ${{ inputs.provider }} \
+            --model ${{ inputs.model }} \
+            --branch benchmark-history \
+            --no-benchmark
 
       - name: Generate dashboard
         working-directory: workspace
@@ -79,11 +90,19 @@ jobs:
           ref: benchmark-history
           path: benchmark-data
 
-      - name: Verify deployment
+      - name: Copy results to docs
         run: |
-          echo "Benchmark data directory contents:"
-          ls -la benchmark-data/docs/
-          echo ""
-          echo "GitHub Pages will be served from benchmark-history branch"
-          echo "Dashboard will be available at:"
-          echo "https://${{ github.repository }}/index.html"
+          mkdir -p workspace/docs/benchmarks
+          cp benchmark-data/docs/benchmarks.json workspace/docs/benchmarks.json 2>/dev/null || true
+          cp benchmark-data/docs/index.html workspace/docs/index.html 2>/dev/null || true
+          # Also copy individual benchmark results if they exist
+          cp -r benchmark-data/docs/benchmarks/*.json workspace/docs/benchmarks/ 2>/dev/null || true
+
+      - name: Commit and push updates
+        working-directory: workspace
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add docs/
+          git commit -m "Update benchmark data" || echo "No changes to commit"
+          git push origin HEAD:benchmark-history
