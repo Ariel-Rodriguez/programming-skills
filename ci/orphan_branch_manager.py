@@ -246,7 +246,11 @@ def manage_benchmark_branch(
         return False
     print(f"Checked out branch: {branch_name}")
 
-    # Clean branch
+    # Clean branch (remove tracked + untracked)
+    result = manager._run_git("rm", "-rf", ".")
+    if not result.success:
+        print(f"Warning: Could not remove tracked files: {result.message}")
+
     result = manager.clean_untracked()
     if not result.success:
         print(f"Warning: Could not clean untracked files: {result.message}")
