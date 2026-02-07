@@ -16,14 +16,20 @@ This spec describes the HTML/CSS/JS structure for the benchmark dashboard page.
 ## Directory Structure
 
 ```
-docs/
+src/
+└── pages/
+    └── benchmarks/
+        ├── index.html                  # Dashboard template
+        ├── app.js                      # Dashboard logic
+        └── data/                       # Optional dev data
+
+site/
 └── benchmarks/
-    ├── {benchmark_id}/                 # Each run gets its own folder
-    │   ├── summary.json                # Full benchmark results
-    │   ├── data.json                   # Extracted data for dashboard
-    │   └── index.html                  # Individual page for this run
-    ├── index.html                      # Main dashboard (aggregated)
-    └── benchmarks.json                 # Aggregated data for JS
+    ├── index.html                      # Copied from src/pages/benchmarks
+    ├── app.js                          # Copied from src/pages/benchmarks
+    ├── benchmarks.json                 # Aggregated data for JS
+    └── data/
+        └── {benchmark_id}/data.json    # Per-run data
 ```
 
 ## Page Structure (index.html)
@@ -239,7 +245,7 @@ fetch(src)
   });
 ```
 
-Per-run pages set `data-benchmarks-src="data.json"` on the `<body>` tag.
+Per-run pages are not generated. The dashboard reads `benchmarks.json` and links are resolved in JS.
 
 ## Data Structure
 
@@ -294,8 +300,8 @@ Per-run pages set `data-benchmarks-src="data.json"` on the `<body>` tag.
 - Rating badges (vague/regular/good/outstanding)
 
 ### 4. History Preservation
-- Each benchmark run stored in `docs/benchmarks/{timestamp}/`
-- `index.html` aggregates all benchmarks
+- Each benchmark run stored in `tests/results/summary-{benchmark_id}.json`
+- `benchmarks.json` aggregates all benchmarks
 - Previous results never overwritten
 
 ## Implementation Tasks
@@ -303,5 +309,5 @@ Per-run pages set `data-benchmarks-src="data.json"` on the `<body>` tag.
 1. **Fix provider/model extraction** - Parse from JSON correctly
 2. **Add expandable code blocks** - Default to truncated, show expand button
 3. **Debug filters** - Ensure filterTable() works correctly
-4. **Fix data structure** - Use timestamped directories for each run
-5. **Update publish workflow** - Save to versioned folders
+4. **Fix data structure** - Use versioned summary files in results
+5. **Update publish workflow** - Copy static assets from src/pages/benchmarks

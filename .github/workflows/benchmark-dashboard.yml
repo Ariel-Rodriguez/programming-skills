@@ -57,4 +57,4 @@ jobs:
             --branch benchmark-history \
             --no-benchmark \
             --results-dir "tests/results" \
-            --output-dir "docs/benchmarks"
+            --output-dir "site/benchmarks"

@@ -65,6 +65,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
     parser.add_argument("--results-dir", help="Custom results directory (default: tests/results)")
+    parser.add_argument("--summary-out", help="Custom summary.json path (overrides results-dir)")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
@@ -74,12 +75,15 @@ def main() -> int:
     skills_dir = Path("skills")
     
     # Support custom results directory for parallel execution
-    if args.results_dir:
+    if args.summary_out:
+        summary_path = Path(args.summary_out)
+        results_dir = summary_path.parent
+    elif args.results_dir:
         results_dir = Path(args.results_dir)
+        summary_path = results_dir / "summary.json"
     else:
         results_dir = Path("tests/results")
-    
-    summary_path = results_dir / "summary.json"
+        summary_path = results_dir / "summary.json"
     if args.model:
         model_name = args.model
     else:

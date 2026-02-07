@@ -137,6 +137,8 @@ def _benchmark_id_from_path(file_path: Path) -> str:
     """
     Determine benchmark_id based on file path.
     """
+    if file_path.name.startswith("summary-") and file_path.suffix == ".json":
+        return file_path.stem.replace("summary-", "", 1)
     if file_path.name == "summary.json":
         return file_path.parent.name
     return file_path.stem
@@ -168,7 +170,7 @@ def process_benchmark_file(file_path: Path) -> dict | None:
         if parsed_timestamp:
             timestamp = _normalize_timestamp(parsed_timestamp)
     if not timestamp:
-        match = re.search(r'(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})', file_path.stem)
+        match = re.search(r'(\d{8}-\d{6})', benchmark_id)
         if match:
             timestamp = _normalize_timestamp(match.group(1))
 
@@ -249,30 +251,24 @@ def process_benchmark_file(file_path: Path) -> dict | None:
     }
 
 
-def collect_all_benchmarks(benchmarks_dir: Path) -> list[dict]:
+def collect_all_benchmarks(results_dir: Path) -> list[dict]:
     """
     Collect all benchmark data from a directory.
 
     Args:
-        benchmarks_dir: Directory containing benchmark JSON files
+        results_dir: Directory containing summary-*.json files
 
     Returns:
         List of structured benchmark data
     """
-    if not benchmarks_dir.exists():
+    if not results_dir.exists():
         return []
 
     all_data = []
 
-    # Look for summary.json files
-    for summary_file in benchmarks_dir.glob('**/summary.json'):
+    # Look for summary-*.json files
+    for summary_file in results_dir.glob('**/summary-*.json'):
         data = process_benchmark_file(summary_file)
-        if data:
-            all_data.append(data)
-
-    # Also look for benchmark-*.json files
-    for benchmark_file in benchmarks_dir.glob('**/benchmark-*.json'):
-        data = process_benchmark_file(benchmark_file)
         if data:
             all_data.append(data)
 
@@ -282,16 +278,14 @@ def collect_all_benchmarks(benchmarks_dir: Path) -> list[dict]:
     return all_data
 
 
-def _write_per_run_data(benchmarks_dir: Path) -> None:
+def _write_per_run_data(output_dir: Path, benchmarks: list[dict]) -> None:
     """
     Write per-run data.json next to each summary.json file.
     """
-    for summary_file in benchmarks_dir.glob('**/summary.json'):
-        benchmark = process_benchmark_file(summary_file)
-        if not benchmark:
-            continue
+    for benchmark in benchmarks:
+        benchmark_id = benchmark.get("benchmark_id", "unknown")
         per_run = build_aggregated_data([benchmark])
-        output_file = summary_file.parent / "data.json"
+        output_file = output_dir / "data" / benchmark_id / "data.json"
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(per_run, f, indent=2)
@@ -353,32 +347,32 @@ def build_aggregated_data(benchmarks: list[dict]) -> dict:
     }
 
 
-def generate_dashboard_data(benchmarks_dir: Path, output_file: Path) -> bool:
+def generate_dashboard_data(results_dir: Path, output_dir: Path) -> bool:
     """
     Main function: Generate dashboard data from benchmark files.
 
-    Pure function - only reads from benchmarks_dir, writes to output_file
-    and per-run data.json files next to summary.json.
+    Pure function - only reads from results_dir, writes to output_dir.
 
     Args:
-        benchmarks_dir: Directory containing benchmark JSON files
-        output_file: Path to write aggregated data JSON
+        results_dir: Directory containing summary-*.json files
+        output_dir: Output directory for benchmarks.json and data/*
 
     Returns:
         True if successful, False otherwise
     """
     try:
         # Collect all benchmarks
-        benchmarks = collect_all_benchmarks(benchmarks_dir)
+        benchmarks = collect_all_benchmarks(results_dir)
 
         # Build aggregated data
         aggregated = build_aggregated_data(benchmarks)
 
         # Write per-run data.json files
-        _write_per_run_data(benchmarks_dir)
+        _write_per_run_data(output_dir, benchmarks)
 
         # Write output
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / "benchmarks.json"
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(aggregated, f, indent=2)
 
@@ -397,14 +391,14 @@ if __name__ == "__main__":
     import sys
 
     # Default paths
-    benchmarks_dir = Path("docs/benchmarks")
-    output_file = Path("docs/benchmarks/benchmarks.json")
+    results_dir = Path("tests/results")
+    output_dir = Path("site/benchmarks")
 
     # Allow command line overrides
     if len(sys.argv) > 1:
-        benchmarks_dir = Path(sys.argv[1])
+        results_dir = Path(sys.argv[1])
     if len(sys.argv) > 2:
-        output_file = Path(sys.argv[2])
+        output_dir = Path(sys.argv[2])
 
-    success = generate_dashboard_data(benchmarks_dir, output_file)
+    success = generate_dashboard_data(results_dir, output_dir)
     sys.exit(0 if success else 1)
