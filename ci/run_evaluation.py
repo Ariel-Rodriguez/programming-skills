@@ -67,13 +67,13 @@ def main():
     timestamp_iso = get_timestamp_iso()
     model_clean = extract_model_name(model)
 
-    # Results directory with timestamp for historical tracking
+    # History directory with timestamp for historical tracking
     # Format: provider/model-timestamp
-    results_dir = Path("tests/results") / provider / f"{model_clean}-{timestamp}"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    history_dir = Path("tests/data-history") / provider / f"{model_clean}-{timestamp}"
+    history_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"==> Running evaluation: {provider}/{model}")
-    print(f"    Results: {results_dir}")
+    print(f"    History: {history_dir}")
     print(f"    Timestamp: {timestamp_iso}")
     print(f"    Threshold: {threshold}")
 
@@ -100,8 +100,8 @@ def main():
         model,
         "--threshold",
         threshold,
-        "--results-dir",
-        str(results_dir),
+        "--history-dir",
+        str(history_dir),
         "--report",
         "--judge",
         "--verbose",
@@ -115,7 +115,7 @@ def main():
     cmd.extend(skill_args)
 
     print(f"[{provider}/{model}] Executing evaluation...")
-    print(f"[{provider}/{model}] Output will be in: {results_dir}")
+    print(f"[{provider}/{model}] Output will be in: {history_dir}")
 
     # Execute with live output
     exit_code = subprocess.run(cmd).returncode
@@ -126,8 +126,8 @@ def main():
         print(f"[{provider}/{model}] ❌ Evaluation failed with exit code {exit_code}")
 
     # Save exit code and metadata for consolidation
-    (results_dir / "exit_code").write_text(str(exit_code))
-    (results_dir / "metadata.json").write_text(json.dumps({
+    (history_dir / "exit_code").write_text(str(exit_code))
+    (history_dir / "metadata.json").write_text(json.dumps({
         "provider": provider,
         "model": model,
         "timestamp": timestamp_iso,

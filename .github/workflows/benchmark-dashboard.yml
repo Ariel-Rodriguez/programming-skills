@@ -45,7 +45,8 @@ jobs:
             --model ${{ inputs.model }} \
             --judge \
             --verbose \
-            --report
+            --report \
+            --all
 
       - name: Publish to benchmark-history branch
         working-directory: repo
@@ -56,5 +57,4 @@ jobs:
             --model ${{ inputs.model }} \
             --branch benchmark-history \
             --no-benchmark \
-            --results-dir "tests/results" \
             --output-dir "site/benchmarks"

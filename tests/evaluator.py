@@ -30,12 +30,35 @@ from services import (
     generate_test_suite,
     run_evaluation,
     save_summary,
+    save_history,
     generate_console_report,
     generate_github_comment,
 )
 
 # Adapter imports
 from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter, CodexCLIAdapter
+
+
+def _timestamp_id() -> str:
+    import time
+    return time.strftime("%Y%m%d-%H%M%S")
+
+
+def _timestamp_iso() -> str:
+    import time
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _safe_model_name(model_name: str) -> str:
+    return model_name.replace("/", "-").replace(":", "-")
+
+
+def _find_latest_summary(history_dir: Path) -> Path | None:
+    try:
+        candidates = sorted(history_dir.glob("summary-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        return candidates[0] if candidates else None
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -64,8 +87,7 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
-    parser.add_argument("--results-dir", help="Custom results directory (default: tests/results)")
-    parser.add_argument("--summary-out", help="Custom summary.json path (overrides results-dir)")
+    parser.add_argument("--history-dir", help="Custom history directory (default: tests/data-history)")
     args = parser.parse_args()
     
     # Wire up adapters (Dependency Injection)
@@ -74,16 +96,13 @@ def main() -> int:
     # Configuration (Policy)
     skills_dir = Path("skills")
     
-    # Support custom results directory for parallel execution
-    if args.summary_out:
-        summary_path = Path(args.summary_out)
-        results_dir = summary_path.parent
-    elif args.results_dir:
-        results_dir = Path(args.results_dir)
-        summary_path = results_dir / "summary.json"
+    if args.provider == "ollama":
+        provider = Provider.OLLAMA
+    elif args.provider == "copilot":
+        provider = Provider.COPILOT
     else:
-        results_dir = Path("tests/results")
-        summary_path = results_dir / "summary.json"
+        provider = Provider.CODEX
+
     if args.model:
         model_name = args.model
     else:
@@ -91,20 +110,27 @@ def main() -> int:
             model_name = "gpt-5.1-codex-mini"
         else:
             model_name = "llama3.2:latest"
-    if args.provider == "ollama":
-        provider = Provider.OLLAMA
-    elif args.provider == "copilot":
-        provider = Provider.COPILOT
+
+    if args.history_dir:
+        history_dir = Path(args.history_dir)
     else:
-        provider = Provider.CODEX
+        history_dir = Path("tests/data-history")
     
     # Handle report-only modes
     if args.report and not args.all and not args.skill:
-        print(generate_console_report(summary_path, fs))
+        latest_summary = _find_latest_summary(history_dir)
+        if latest_summary:
+            print(generate_console_report(latest_summary, fs))
+            return 0
+        print("No summary file found. Run a benchmark first.")
         return 0
     
     if args.github_comment and not args.all and not args.skill:
-        result = generate_github_comment(summary_path, fs)
+        latest_summary = _find_latest_summary(history_dir)
+        if not latest_summary:
+            print("No summary file found. Run a benchmark first.")
+            return 0
+        result = generate_github_comment(latest_summary, fs)
         if is_success(result):
             write_result = fs.write_text(Path("comment.md"), result.value)
             if is_success(write_result):
@@ -176,10 +202,10 @@ def main() -> int:
             print("Error: Codex CLI not available. Install Codex CLI and sign in with ChatGPT.")
             return 1
     
-    # Create results directory
-    result = fs.mkdir(results_dir)
+    # Create history directory
+    result = fs.mkdir(history_dir)
     if is_failure(result):
-        print(f"Warning: Could not create results directory: {result.error_message}")
+        print(f"Warning: Could not create history directory: {result.error_message}")
     
     # Run evaluations
     print(f"\n{'=' * 60}")
@@ -235,6 +261,10 @@ def main() -> int:
                 f"Improvement: {eval_result.improvement:+}%"
             )
     
+    timestamp_id = _timestamp_id()
+    timestamp_iso = _timestamp_iso()
+    summary_path = history_dir / f"summary-{config.provider.value}-{_safe_model_name(config.model_name)}-{timestamp_id}.json"
+
     # Save summary
     save_result = save_summary(tuple(all_results), summary_path, fs)
     
@@ -244,6 +274,11 @@ def main() -> int:
         print(f"\n{'=' * 60}")
         print(f"Complete. Summary saved to: {summary_path}")
     
+    # Save per-skill history
+    history_result = save_history(tuple(all_results), history_dir, config.provider.value, timestamp_id, timestamp_iso, fs)
+    if is_failure(history_result):
+        print(f"\nWarning: Failed to save history: {history_result.error_message}")
+
     # Generate reports if requested
     if args.report:
         print(f"\n{generate_console_report(summary_path, fs)}")

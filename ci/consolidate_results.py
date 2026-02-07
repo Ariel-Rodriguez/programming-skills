@@ -113,7 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description="Consolidate evaluation results")
     parser.add_argument("--mode", choices=["pr-comment", "benchmark"], default="pr-comment",
                        help="Output mode: pr-comment or benchmark")
-    parser.add_argument("--results-dir", type=Path, default="tests/results",
+    parser.add_argument("--results-dir", type=Path, default="tests/data-history",
                        help="Directory containing evaluation results")
     parser.add_argument("--output-dir", type=Path, default=None,
                        help="Output directory for benchmark mode")
@@ -126,8 +126,8 @@ def main():
 
     print(f"==> Consolidating results (mode: {args.mode})")
 
-    # Find all summary.json files
-    summary_files = sorted(args.results_dir.glob("*/summary.json"))
+    # Find all summary files
+    summary_files = sorted(args.results_dir.glob("**/summary-*.json"))
 
     if not summary_files:
         print(f"No results found in {args.results_dir}")

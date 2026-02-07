@@ -16,9 +16,9 @@ Manual trigger via GitHub Actions workflow dispatch with inputs:
 Manual GitHub Actions Trigger
   inputs: provider (choice), model (string)
     ↓
-Run evaluation for provider/model → tests/results/summary.json
+Run evaluation for provider/model → tests/data-history/summary-<provider>-<model>-<timestamp>.json
     ↓
-Convert to tests/data-history/<skill>/<model>-<timestamp>.json
+Write tests/data-history/<skill>/<model>-<timestamp>.json
     ↓
 Generate dashboard data (pure function)
     ↓

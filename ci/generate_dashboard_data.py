@@ -146,6 +146,8 @@ def collect_all_benchmarks(history_dir: Path) -> list[dict]:
     benchmarks_map: dict[tuple[str, str, str], dict] = {}
 
     for skill_file in history_dir.glob('**/*.json'):
+        if skill_file.name.startswith("summary-"):
+            continue
         try:
             data = json.loads(skill_file.read_text())
         except Exception:

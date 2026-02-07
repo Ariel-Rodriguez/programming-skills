@@ -230,7 +230,7 @@ def main():
         sys.exit(0)
 
     # Clean previous results
-    results_base = Path("tests/results")
+    results_base = Path("tests/data-history")
     import shutil
     if results_base.exists():
         shutil.rmtree(results_base)
