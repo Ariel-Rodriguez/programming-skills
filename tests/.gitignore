@@ -1,5 +1,4 @@
-# Benchmark results and generated files
-results/
+# generated files
 test_cases/*.json
 __pycache__/
 *.pyc

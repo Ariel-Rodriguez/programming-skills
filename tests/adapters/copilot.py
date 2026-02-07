@@ -27,7 +27,7 @@ class CopilotCLIAdapter:
         # Try new copilot CLI first, fall back to gh extension
         # The standalone CLI has auth issues with PATs in CI (see: github/copilot-cli#355)
         # So we use gh copilot extension which works better with GITHUB_TOKEN
-        cmd_new = [
+        cmd_cli = [
             "copilot", 
             "-p", prompt,
             "--model", config.model_name,
@@ -46,9 +46,9 @@ class CopilotCLIAdapter:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
-            # Try gh copilot extension (better for CI with PATs)
+            # If gh copilot not available, try standalone copilot CLI
             result = subprocess.run(
-                cmd_gh,
+                cmd_cli,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
@@ -57,10 +57,10 @@ class CopilotCLIAdapter:
                 input="\n"  # Auto-select first option
             )
             
-            # If gh copilot not available, try standalone copilot CLI
+            # Try gh copilot extension (better for CI with PATs)
             if result.returncode != 0 and "gh: unknown command" in result.stderr:
                 result = subprocess.run(
-                    cmd_new,
+                    cmd_gh,
                     capture_output=True,
                     text=True,
                     encoding='utf-8',

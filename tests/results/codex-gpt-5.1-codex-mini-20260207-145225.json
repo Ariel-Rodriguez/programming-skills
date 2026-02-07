@@ -1,0 +1,593 @@
+{
+  "timestamp": "2026-02-07T14:52:25",
+  "results": [
+    {
+      "skill": "ps-composition-over-coordination",
+      "severity": "SUGGEST",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_orchestrator_class",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Refactored**  \n- Split the monolithic `processPayment` into composable services, each owning one c...",
+            "response_full": "**Refactored**  \n- Split the monolithic `processPayment` into composable services, each owning one concern and throwing their own errors when necessary.  \n- The `PaymentProcessor` now orchestrates the flow through these services without embedding the business logic, making it easier to test/replace each step.  \n- Utility `Database` helpers keep audit/log updates centralized while the services return structured results for downstream use.\n\n```javascript\nclass AuthenticationService {\n    constructor(authService) {\n        this.authService = authService;\n    }\n\n    async authenticate(token) {\n        const session = await this.authService.getSession(token);\n        if (!session || !session.isValid) {\n            throw new Error(\"Unauthorized\");\n        }\n        return session;\n    }\n}\n\nclass PaymentValidator {\n    validate(request) {\n        if (!request.amount || request.amount <= 0) {\n            throw new Error(\"Invalid amount\");\n        }\n        if (!request.currency || request.currency !== \"USD\") {\n            throw new Error(\"Only USD supported\");\n        }\n    }\n}\n\nclass RiskAssessor {\n    constructor(db) {\n        this.db = db;\n    }\n\n    async assess(userId) {\n        const [riskScore] = await this.db.query(\n            \"SELECT score FROM risk_profiles WHERE user_id = ?\",\n            userId\n        );\n        if (riskScore > 80) {\n            throw new Error(\"High risk transaction\");\n        }\n        return riskScore;\n    }\n}\n\nclass BankCharger {\n    constructor(bankApi, db) {\n        this.bankApi = bankApi;\n        this.db = db;\n    }\n\n    async charge(card, amount) {\n        const transaction = await this.bankApi.charge({\n            card,\n            amount,\n            ref: `TXN-${Date.now()}`\n        });\n\n        if (transaction.status !== \"success\") {\n            await this.db.execute(\n                \"INSERT INTO audit_logs (event, status) VALUES (?, ?)\",\n                [\"payment_failed\", transaction.errorMessage]\n            );\n            throw new Error(`Bank error: ${transaction.errorMessage}`);\n        }\n\n        return transaction;\n    }\n}\n\nclass Ledger {\n    constructor(db) {\n        this.db = db;\n    }\n\n    async recordSuccessfulPayment(userId, transactionId, amount) {\n        await this.db.execute(\n            \"UPDATE accounts SET balance = balance - ? WHERE user_id = ?\",\n            [amount, userId]\n        );\n        await this.db.execute(\n            \"INSERT INTO transactions (id, user_id, amount) VALUES (?, ?, ?)\",\n            [transactionId, userId, amount]\n        );\n    }\n}\n\nclass NotificationService {\n    constructor(emailService) {\n        this.emailService = emailService;\n    }\n\n    async notify(email, amount) {\n        await this.emailService.send(\n            email,\n            \"Payment Successful\",\n            `You charged $${amount}`\n        );\n    }\n}\n\nclass PaymentProcessor {\n    constructor({ authService, db, bankApi, emailService }) {\n        this.authenticator = new AuthenticationService(authService);\n        this.validator = new PaymentValidator();\n        this.riskAssessor = new RiskAssessor(db);\n        this.charger = new BankCharger(bankApi, db);\n        this.ledger = new Ledger(db);\n        this.notifier = new NotificationService(emailService);\n    }\n\n    async processPayment(request) {\n        const session = await this.authenticator.authenticate(request.token);\n        this.validator.validate(request);\n        await this.riskAssessor.assess(session.userId);\n\n        const transaction = await this.charger.charge(request.cardNumber, request.amount);\n\n        await this.ledger.recordSuccessfulPayment(\n            session.userId,\n            transaction.id,\n            request.amount\n        );\n\n        await this.notifier.notify(session.email, request.amount);\n\n        return {\n            success: true,\n            transactionId: transaction.id\n        };\n    }\n}\n```"
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "````javascript\nconst createAuthenticator = (authService) => async (token) => {\n  const session = awa...",
+            "response_full": "````javascript\nconst createAuthenticator = (authService) => async (token) => {\n  const session = await authService.getSession(token);\n  if (!session || !session.isValid) {\n    throw new Error(\"Unauthorized\");\n  }\n  return session;\n};\n\nconst createRequestValidator = () => (request) => {\n  if (!request.amount || request.amount <= 0) {\n    throw new Error(\"Invalid amount\");\n  }\n  if (!request.currency || request.currency !== \"USD\") {\n    throw new Error(\"Only USD supported\");\n  }\n  if (!request.cardNumber) {\n    throw new Error(\"Missing card number\");\n  }\n  return {\n    cardNumber: request.cardNumber,\n    amount: request.amount,\n  };\n};\n\nconst createRiskChecker = (db) => async (userId) => {\n  const [row] = await db.query(\n    \"SELECT score FROM risk_profiles WHERE user_id = ?\",\n    [userId]\n  );\n  const riskScore = row?.score ?? 0;\n  if (riskScore > 80) {\n    throw new Error(\"High risk transaction\");\n  }\n  return riskScore;\n};\n\nconst createAuditLogger = (db) => async (event, status) =>\n  db.execute(\"INSERT INTO audit_logs (event, status) VALUES (?, ?)\", [\n    event,\n    status,\n  ]);\n\nconst createBankCharger = (bankApi, auditLogger) => async ({ cardNumber, amount }) => {\n  const transaction = await bankApi.charge({\n    card: cardNumber,\n    amount,\n    ref: `TXN-${Date.now()}`,\n  });\n  if (transaction.status !== \"success\") {\n    await auditLogger(\"payment_failed\", transaction.errorMessage);\n    throw new Error(`Bank error: ${transaction.errorMessage}`);\n  }\n  return transaction;\n};\n\nconst createAccountUpdater = (db) => async ({ userId, amount, transactionId }) => {\n  await db.execute(\"UPDATE accounts SET balance = balance - ? WHERE user_id = ?\", [\n    amount,\n    userId,\n  ]);\n  await db.execute(\n    \"INSERT INTO transactions (id, user_id, amount) VALUES (?, ?, ?)\",\n    [transactionId, userId, amount]\n  );\n};\n\nconst createNotifier = (emailService) => async ({ email, amount }) => {\n  await emailService.send(email, \"Payment Successful\", `You charged $${amount}`);\n};\n\nconst buildPaymentProcessor = ({ authService, db, bankApi, emailService }) => {\n  const authenticate = createAuthenticator(authService);\n  const validateRequest = createRequestValidator();\n  const checkRisk = createRiskChecker(db);\n  const auditLogger = createAuditLogger(db);\n  const chargeCard = createBankCharger(bankApi, auditLogger);\n  const updateAccounts = createAccountUpdater(db);\n  const notify = createNotifier(emailService);\n\n  return async function processPayment(request) {\n    const session = await authenticate(request.token);\n    const { cardNumber, amount } = validateRequest(request);\n    await checkRisk(session.userId);\n\n    const transaction = await chargeCard({ cardNumber, amount });\n    await updateAccounts({\n      userId: session.userId,\n      amount,\n      transactionId: transaction.id,\n    });\n\n    await notify({ email: session.email, amount });\n\n    return {\n      success: true,\n      transactionId: transaction.id,\n    };\n  };\n};\n\nexport { buildPaymentProcessor };\n```"
+          }
+        },
+        {
+          "name": "identify_coordination_bottleneck",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Coordination Bottleneck**\n\n- A single `Manager` class that encapsulates the logic for three dispar...",
+            "response_full": "**Coordination Bottleneck**\n\n- A single `Manager` class that encapsulates the logic for three disparate subsystems violates the **Single Responsibility Principle** (SRP): the class now has multiple reasons to change (one per subsystem) so every change ripple affects the entire manager and increases the chance of bugs.\n- It also conflicts with the **Law of Demeter / minimal knowledge principle** because each subsystem consumer must now talk to a \u201cGod object,\u201d reducing modularity and making it harder to reason about subsystem interactions independently.\n- Because all coordination runs through that manager, it becomes a **bottleneck**: tasks that could proceed in parallel or be handled locally are serialized through one object, so availability, scalability, and testing are constrained by that single point of failure.\n- The **Dependency Inversion Principle** is harder to satisfy too\u2014higher-level modules become tightly coupled to this mega-manager instead of to abstracted subsystem interfaces, making reuse, mocking for tests, and replacing subsystems difficult.\n- Breaking the responsibilities into subsystem-specific controllers or orchestrators (possibly using a fa\u00e7ade or mediator) spreads decisions outward, keeps dependencies directional, and avoids bloating any one class with coordination logic."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Explanation**\n\nA \u201cManager\u201d that centralizes the logic for three subsystems breaks the principle of...",
+            "response_full": "**Explanation**\n\nA \u201cManager\u201d that centralizes the logic for three subsystems breaks the principle of composition over orchestration. It creates a single unit that knows about and controls far too much\u2014violating **single responsibility** because it now owns multiple behaviors, and **dependency inversion** because it directly reaches into each subsystem\u2019s internals. That tight coupling also makes the whole structure brittle: every change in one subsystem risks touching the manager, defeating **modularity** and **testability**. Instead, each subsystem should expose a simple interface, and higher-level behavior should emerge by composing those interfaces (e.g., chaining focused helpers or pipelines). That keeps responsibilities isolated, tests fast, and the system flexible enough to swap or extend units without touching a central coordinator."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "regular",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "A still funnels all decisions through a single PaymentProcessor, so it only partially lifts logic into focused services while retaining a central coordinator. B instead wires together tiny composable helpers with clear inputs/outputs, so the behavior genuinely emerges from the structure and is easier to test or replace. That composability makes B the better example of the stated principle and the more maintainable solution."
+      }
+    },
+    {
+      "skill": "ps-error-handling-design",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_swallowed_error",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Refactors the handler so it doesn\u2019t swallow the exception, adds context for observability, and keeps...",
+            "response_full": "Refactors the handler so it doesn\u2019t swallow the exception, adds context for observability, and keeps error-flow explicit.\n\n```javascript\nclass DatabaseSaveError extends Error {\n  constructor(message, user, cause) {\n    super(message);\n    this.name = 'DatabaseSaveError';\n    this.userId = user?.id;\n    this.cause = cause;\n  }\n}\n\nfunction saveUser(user) {\n  try {\n    db.insert(user);\n  } catch (error) {\n    console.error('saveUser failed', {\n      userId: user?.id,\n      message: error.message,\n      stack: error.stack,\n    });\n    throw new DatabaseSaveError('Unable to persist user', user, error);\n  }\n}\n```\n\n- doesn\u2019t swallow the original error, so callers can decide how to recover.\n- centralizes logging for observability and includes useful metadata.\n- wraps the low-level error in a domain-specific error to keep abstractions clean.\n\nNext steps: make sure callers handle or propagate `DatabaseSaveError`, and consider adding automated tests that assert the wrapper behavior."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Error-first save**\n- `saveUser` now returns an explicit `Result`-shaped object so callers must han...",
+            "response_full": "**Error-first save**\n- `saveUser` now returns an explicit `Result`-shaped object so callers must handle both success and failure; recoverable database failures are surfaced as `InfrastructureError` with context instead of being swallowed.\n- The function now distinguishes outcomes: success returns the saved entity (or relevant info) and failure returns structured metadata (`kind`, `reason`, `details`) instead of logging and ignoring the exception.\n\n```javascript\nfunction saveUser(user) {\n  const insertResult = db.insert(user);\n  if (insertResult.success) {\n    return { success: true, value: insertResult.value ?? user };\n  }\n\n  return {\n    success: false,\n    error: {\n      kind: 'InfrastructureError',\n      reason: 'DatabaseInsertFailed',\n      details: insertResult.error?.message ?? 'unknown database error',\n      originalError: insertResult.error,\n    },\n  };\n}\n```\n\nNext steps: have callers inspect `result.success` before proceeding and map failures to appropriate UI/portal responses."
+          }
+        },
+        {
+          "name": "design_validation_flow",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Registration Flow**\n\n- Validate Input: on form submit check the email against RFC 5322-ish regex/f...",
+            "response_full": "**Registration Flow**\n\n- Validate Input: on form submit check the email against RFC 5322-ish regex/format rules; reject with localized \u201cInvalid email address\u201d message and keep focus on that field before calling any backend logic.\n\n- Server-side entry point calls `validateEmail()` and rejects early if invalid, logging the attempted email for diagnostics (but never exposing logs to users). This ensures the client can\u2019t bypass validation.\n\n- Database Layer: upon connection attempt wrap the client call (e.g., `connect()`, `pool.acquire()`) in a try/catch. If the connection fails, return a structured error (`{ type: \"db-connection\", message: \"Could not reach database. Please try again later.\" }`) and trigger an alert banner on the UI; log the full stack trace for ops.\n\n- Existence Check: once the database is accessible, query `SELECT id FROM users WHERE email = ?` inside a transaction; if a row exists, respond with `{ type: \"user-exists\", message: \"An account with this email already exists.\" }`, highlight the email field, and optionally surface an action (\u201cSign in instead\u201d).\n\n- Creation Path: if validation passes and the user doesn\u2019t exist, proceed to hash the password, insert the user, commit, then issue success response.\n\n- Error Handling Design: classify errors into invalid input, recoverable operational (e.g., db connection), and business (user already exists). Each handler maps to a user-facing message, a log level, and a retry strategy: \n  1. Invalid email \u2192 client-side feedback + `400` response; no retry.\n  2. Database connection \u2192 `503` response, exponential retry on the client (with user-visible \u201cRetry\u201d button) and alert to ops.\n  3. User already exists \u2192 `409` response with suggestion to sign in; no automatic retry.\n\n- Monitoring/Alerts: for connection failures, increment a metric/counter to trigger alerts; for repeated invalid email submissions, consider rate limiting."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Registration Flow**\n\n- Define clear result type that separates success from each recoverable failu...",
+            "response_full": "**Registration Flow**\n\n- Define clear result type that separates success from each recoverable failure; e.g.\n  ```ts\n  type RegistrationResult =\n    | Success<{ userId: string }>\n    | Failure<InvalidEmail | UserAlreadyExists | DatabaseUnavailable>;\n  ```\n- Validate input first, returning `Failure<InvalidEmail>` before any side effect; include the invalid email in the error context so callers can log or show it.\n\n- When creating the user record, wrap the persistence call so infrastructure errors map to `DatabaseUnavailable`, while domain checks (like duplicate emails) map to `UserAlreadyExists`. Retry or circuit-breaker is handled at a higher level if recovery might succeed later.\n\n- Expose the flow through one entry-point function whose signature forces callers to handle each branch. For example:\n  ```ts\n  async function registerUser(\n    command: RegisterUserCommand\n  ): Promise<RegistrationResult> {\n    if (!isValidEmail(command.email)) {\n      return Failure({ type: \"InvalidEmail\", value: command.email });\n    }\n\n    const createResult = await userRepo.create(command);\n    if (createResult.isSuccess) {\n      return Success({ userId: createResult.value });\n    }\n\n    return mapRepoError(createResult.error);\n  }\n  ```\n  `mapRepoError` translates infra errors into `DatabaseUnavailable` and domain conflicts into `UserAlreadyExists`.\n\n- At the API boundary, pattern-match the `RegistrationResult`: respond with 400 for `InvalidEmail`, 409 for `UserAlreadyExists`, 503 when the database is unreachable, and only emit 201 when `Success`.\n\n- Non-recoverable issues (unexpected nulls, configuration missing) should throw immediately so the process fails fast; such errors should not get caught and converted into `RegistrationResult`.\n\nNext steps: run any integration tests against the persistence layer and ensure the API consumer handles all branches explicitly."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "regular",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Solution A still relies on throwing exceptions and treating the Result type as implicit, so it only partially addresses explicit error handling, while Solution B defines explicit Result/Either structures, maps recoverable failures, and keeps the API signature clear. That makes B better aligned with the principle and easier to test/extend."
+      }
+    },
+    {
+      "skill": "ps-explicit-boundaries-adapters",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_database_leak",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Added explicit port/adapters example: domain `enrollStudent` now takes `studentPort` and `enrollme...",
+            "response_full": "- Added explicit port/adapters example: domain `enrollStudent` now takes `studentPort` and `enrollmentPort`, enforces eligibility, and returns structured status instead of touching `db` directly.\n- Provided concrete `StudentDbAdapter` and `EnrollmentDbAdapter` implementations plus composition-root wiring so database operations live entirely in adapters.\n- Suggested wiring placeholders clarify where to plug real DB connections, keeping core logic framework-agnostic.\n\nNext steps: replace the `db = undefined` stub with the actual connection and add unit tests that mock the ports to cover eligibility and enrollment flows."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Hexagonal Refactor**\n\n- Introduce a `StudentEnrollmentPort` (e.g., `StudentRepository` and `Enroll...",
+            "response_full": "**Hexagonal Refactor**\n\n- Introduce a `StudentEnrollmentPort` (e.g., `StudentRepository` and `EnrollmentRepository`) in the domain and keep `enrollStudent` working only with those interfaces so core logic stays framework-free.\n- Move SQL queries into an adapter (e.g., `DatabaseStudentAdapter`) that implements the port, handling all DB concerns and translating to/from domain objects.\n\n```javascript\n// domain/ports/studentRepository.js\nexport class StudentRepository {\n  async findById(studentId) {\n    throw new Error('not implemented');\n  }\n}\n\n// domain/ports/enrollmentRepository.js\nexport class EnrollmentRepository {\n  async add(enrollment) {\n    throw new Error('not implemented');\n  }\n}\n\n// domain/useCases/enrollStudent.js\nexport async function enrollStudent(studentId, courseId, { studentRepo, enrollmentRepo }) {\n  const student = await studentRepo.findById(studentId);\n  if (!student) {\n    throw new Error('StudentNotFound');\n  }\n  if (!student.eligible) {\n    throw new Error('StudentNotEligible');\n  }\n\n  await enrollmentRepo.add({ studentId, courseId });\n}\n```\n\n```javascript\n// adapters/postgres/studentRepository.js\nimport { StudentRepository } from '../../domain/ports/studentRepository.js';\n\nexport class PostgresStudentRepository extends StudentRepository {\n  constructor(db) {\n    super();\n    this.db = db;\n  }\n\n  async findById(studentId) {\n    const rows = await this.db.query('SELECT * FROM students WHERE id = $1', [studentId]);\n    if (!rows.length) return null;\n    return {\n      id: rows[0].id,\n      eligible: rows[0].eligible,\n      // map other domain fields\n    };\n  }\n}\n\n// adapters/postgres/enrollmentRepository.js\nimport { EnrollmentRepository } from '../../domain/ports/enrollmentRepository.js';\n\nexport class PostgresEnrollmentRepository extends EnrollmentRepository {\n  constructor(db) {\n    super();\n    this.db = db;\n  }\n\n  async add(enrollment) {\n    await this.db.execute('INSERT INTO enrollments (student_id, course_id) VALUES ($1, $2)', [\n      enrollment.studentId,\n      enrollment.courseId,\n    ]);\n  }\n}\n```\n\n```javascript\n// compositionRoot.js\nimport { enrollStudent } from './domain/useCases/enrollStudent.js';\nimport { PostgresStudentRepository } from './adapters/postgres/studentRepository.js';\nimport { PostgresEnrollmentRepository } from './adapters/postgres/enrollmentRepository.js';\nimport db from './infra/database.js';\n\nconst studentRepo = new PostgresStudentRepository(db);\nconst enrollmentRepo = new PostgresEnrollmentRepository(db);\n\nexport function handleEnrollmentRequest(studentId, courseId) {\n  return enrollStudent(studentId, courseId, { studentRepo, enrollmentRepo });\n}\n```\n\nNext steps: add unit tests for `enrollStudent` using mocks/stubs for the ports, and ensure adapters are covered with integration tests if needed."
+          }
+        },
+        {
+          "name": "identify_infrastructure_leaks",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- The business logic directly calls `axios.post('/api/pay', \u2026)`, which hard-codes an HTTP endpoint a...",
+            "response_full": "- The business logic directly calls `axios.post('/api/pay', \u2026)`, which hard-codes an HTTP endpoint and HTTP client inside the domain layer; that leaks the infrastructure (internal URL, HTTP verbs, transport details) into the payment-processing code, so any change to the API surface or HTTP stack requires touching the business logic. Wrap the HTTP call behind an interface (e.g., `paymentGateway.charge(order)` injected into `processPayment`) so tests can mock it and deployment-specific endpoints stay in the infrastructure/config layers.\n- Because `processPayment` instantiates the HTTP request itself, it\u2019s also responsible for transport concerns such as base URL, retries, headers, or authentication; those details should live in infrastructure wiring. Inject a configured client or gateway so environment-specific settings (dev/staging/production URLs, certificates, circuit breakers) don\u2019t leak into the domain layer and can be swapped without editing `processPayment`.\n- Passing `order.total` straight into the request means there\u2019s no validation or policy (currency, rounding, limits) before touching the network; that\u2019s both a domain issue and an operational risk if malformed values hit the payment endpoint. Validate and canonicalize the amount before delegating to the gateway interface.\n- There\u2019s no error handling or logging around the network call, so transient infrastructure failures bubble up directly to callers. Let the gateway express failures through well-defined domain errors, and equip the infrastructure layer with retries/monitoring so business logic doesn\u2019t need to know about HTTP error semantics.\n\nFixing these by introducing a payment gateway interface, injecting it (instead of hard-wiring axios), validating inputs, and centralizing infrastructure concerns will eliminate the leaks and keep the business logic focused on domain rules."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Hexagonal Check**\n\n- The `processPayment` logic imports `axios` directly and posts to `/api/pay`, ...",
+            "response_full": "**Hexagonal Check**\n\n- The `processPayment` logic imports `axios` directly and posts to `/api/pay`, which mixes core payment processing with HTTP/infrastructure concerns (violates the \u201ccore domain has no external dependencies\u201d rule).  \n- The function should instead depend on a port like `PaymentProcessor` (`process(order)`), keep domain objects in/out, and delegate actual HTTP work to an adapter that implements that interface."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "regular",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "A introduces adapters but still lets business logic call axios directly and handles transport concerns, so it only partially isolates infrastructure. B defines explicit ports, adapter implementations, and a clean composition root, aligning tightly with Hexagonal principles and keeping the core insulated. That makes B more testable, maintainable, and the stronger overall solution."
+      }
+    },
+    {
+      "skill": "ps-explicit-ownership-lifecycle",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "outstanding",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_leaky_file_handle",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Added a `try/finally` around the write so the file descriptor always closes, guarding the `fs.clos...",
+            "response_full": "- Added a `try/finally` around the write so the file descriptor always closes, guarding the `fs.closeSync` call in case the open throws before we assign anything."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Ownership-safe**\n- Introduced explicit ownership by acquiring the file handle once and wrapping th...",
+            "response_full": "**Ownership-safe**\n- Introduced explicit ownership by acquiring the file handle once and wrapping the write in a `try/finally` so the owning scope always releases it, even if `fs.writeSync` throws.\n- Scoped the owner variable close to its usage to keep the lifecycle deterministic and the intent obvious.\n\n```javascript\nfunction logMessage(filePath, message) {\n    const fileHandle = fs.openSync(filePath, 'a'); // owner acquires resource\n    try {\n        fs.writeSync(fileHandle, message + '\\n');\n    } finally {\n        fs.closeSync(fileHandle); // deterministic cleanup\n    }\n}\n```\n\nNext actions: none unless you want to expand this pattern to async versions or wrap it in a helper/utility."
+          }
+        },
+        {
+          "name": "design_subscription_owner",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Using `ps-explicit-ownership-lifecycle` to keep the event subscription ownership deterministic.\n\n- T...",
+            "response_full": "Using `ps-explicit-ownership-lifecycle` to keep the event subscription ownership deterministic.\n\n- The `Component` owns exactly one subscription instance and documents that it must be torn down before the component is dropped.\n- Construction acquires the subscription, `dispose()` (or the surrounding scope) releases it, and the owner is responsible for invoking that cleanup whenever the component stops being valid.\n- Storing the unsubscribe handle in a single field prevents the subscription from escaping (no shared references) and lets the component check \u201cowned-but-unused\u201d states.\n\n```ts\ninterface EventBus<Event = unknown> {\n  subscribe(handler: (event: Event) => void): Subscription;\n}\n\ninterface Subscription {\n  unsubscribe(): void;\n}\n\nclass Component<Event> {\n  private readonly bus: EventBus<Event>;\n  private subscription?: Subscription;\n\n  constructor(bus: EventBus<Event>) {\n    this.bus = bus;\n    this.subscription = this.bus.subscribe(this.handleEvent);\n  }\n\n  private handleEvent = (event: Event) => {\n    // Handle incoming events\n  };\n\n  dispose() {\n    if (this.subscription) {\n      this.subscription.unsubscribe();\n      this.subscription = undefined;\n    }\n  }\n}\n```\n\n- The component acquires the bus subscription inside its constructor (ownership created) and releases it in `dispose()` (deterministic destruction).\n- `dispose()` can be wired into the surrounding lifecycle (e.g., view removal, `finally`, or a parent owning component) so the subscription never outlives the component.\n\nNext step: ensure every user of `Component` calls `dispose()` (or wraps it in a helper that does) so cleanup stays deterministic."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "Component encapsulates its own event-bus subscription so the resource never outlives it.\n\n- Componen...",
+            "response_full": "Component encapsulates its own event-bus subscription so the resource never outlives it.\n\n- Component is the sole owner of the subscription: it acquires it in its constructor, stores it in a private field, and documents that `dispose` relinquishes ownership.\n- A `dispose` method is provided (and can be wired into a `try/finally`, `using`/`Symbol.dispose`, or any lifecycle manager) to deterministically unsubscribe; calling it multiple times is safe because the subscription is nulled out.\n- The event handler delegates through the component, so no other object holds a reference that would outlive the owner; the component can also expose a `static create` helper that wires the cleanup to a guard for brevity.\n\n```ts\ninterface Subscription {\n  unsubscribe(): void;\n}\n\ninterface EventBus {\n  subscribe(listener: (event: unknown) => void): Subscription;\n}\n\nclass Component {\n  private subscription: Subscription | null;\n\n  constructor(private readonly eventBus: EventBus) {\n    this.subscription = this.eventBus.subscribe(this.handleEvent);\n  }\n\n  private handleEvent = (event: unknown) => {\n    /* owned handler logic */\n  };\n\n  dispose(): void {\n    if (this.subscription) {\n      this.subscription.unsubscribe();\n      this.subscription = null;\n    }\n  }\n\n  static withGuard<T extends (...args: any[]) => any>(\n    eventBus: EventBus,\n    use: (component: Component) => T\n  ): T {\n    const component = new Component(eventBus);\n    try {\n      return use(component);\n    } finally {\n      component.dispose();\n    }\n  }\n}\n```\n\nThis keeps ownership explicit (constructor acquires, `dispose` releases), scopes the subscription tightly to the component, and enforces cleanup even when callers forget by offering the guard helper. No tests were run; feel free to hook the guard into your component lifecycle manager or add a unit test that asserts `unsubscribe` is invoked."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "good",
+        "option_b_rating": "outstanding",
+        "score": 100,
+        "reasoning": "Solution A keeps ownership clear through constructor acquisition and explicit `dispose`, but it lacks helpers to enforce cleanup for callers. Solution B not only mirrors the same ownership discipline but also adds a guard helper that wires disposal into the call site, which makes deterministic cleanup easier to test and maintain. That extra structure is why B scores higher across the principle and code-quality dimensions."
+      }
+    },
+    {
+      "skill": "ps-explicit-state-invariants",
+      "severity": "BLOCK",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_boolean_explosion",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Discriminated Union**\n\n- Replace the general `isLoading/isError` flags with a `status` field (e.g....",
+            "response_full": "**Discriminated Union**\n\n- Replace the general `isLoading/isError` flags with a `status` field (e.g. `'idle' | 'loading' | 'success' | 'error'`) so each shape only allows the fields that make sense.\n- Example TypeScript:\n\n```ts\ntype SuccessState = { status: 'success'; data: string; error: null };\ntype ErrorState = { status: 'error'; data: null; error: string };\ntype LoadingState = { status: 'loading'; data: null; error: null };\ntype IdleState = { status: 'idle'; data: null; error: null };\n\ntype State = SuccessState | ErrorState | LoadingState | IdleState;\n\nconst state: State = {\n  status: 'error',\n  data: null,\n  error: 'Network timeout'\n};\n```\n\n- Now TypeScript will reject invalid combinations like `{ status: 'loading'; error: 'foo' }` because the `status` discriminant determines the allowed shape."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**State Union**\n\nModel state as a tagged union so only one branch can exist at a time and every bran...",
+            "response_full": "**State Union**\n\nModel state as a tagged union so only one branch can exist at a time and every branch carries exactly the fields it needs:\n\n```ts\ntype RequestState =\n  | { status: 'idle' }                            // invariant: no data/error\n  | { status: 'loading' }                         // invariant: still no data/error\n  | { status: 'success'; data: SomeData }          // invariant: data present, error absent\n  | { status: 'error'; error: string };            // invariant: error present, data absent\n```\n\nEach transition becomes a named helper (e.g., `startLoading`, `succeedWith(data)`, `failWith(message)`), so you always assign a whole valid branch at once and never toggle overlapping booleans.\n\nNext steps: pick or define `SomeData`, implement the transition helpers you need, and use exhaustive `switch`/`match` logic when reading `state` so the compiler enforces every case."
+          }
+        },
+        {
+          "name": "state_invariant_definition",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Used **ps-explicit-state-invariants** because you\u2019re asking for how to design state with an explicit...",
+            "response_full": "Used **ps-explicit-state-invariants** because you\u2019re asking for how to design state with an explicit invariant.\n\n- Primary invariant: the wizard must always be in exactly one discrete step state, and that step governs which form data is valid and whether a submission result may exist.  \n  - `currentStep` \u2260 `null` and identifies one of the predefined steps (e.g., Step 1, Step 2, \u2026, Submission).  \n  - `formData` contains valid inputs only for steps that are \u2264 `currentStep`; data for future steps must be absent or invalid, because allowing it would create indistinct states.  \n  - `submissionResult` is present if and only if `currentStep` is the terminal \u201csubmitted\u201d state (or whatever final step represents completion); in every other step it must be unset/null."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Primary Invariant**\n\nThe wizard state must always reflect exactly one discrete phase of the journe...",
+            "response_full": "**Primary Invariant**\n\nThe wizard state must always reflect exactly one discrete phase of the journey: e.g., `CollectingStep(stepIndex, formData)`, `Reviewing(formData)`, `Submitting(formData)`, or `Completed(result)`. Each variant guarantees:\n\n- `Current Step` and `Form Data` exist together when the user is entering answers (`CollectingStep`).\n- `Submission Result` exists only in `Completed`.\n- `Form Data` is immutable/validated for the step it belongs to\u2014never split across unrelated flags.\n- Transition functions move between variants atomically (e.g., `collect(stepIndex, data) -> CollectingStep`, `submit(data) -> Submitting`, `finish(result) -> Completed`).\n\n**Invariant statement:** \u201cAt any point the wizard is in exactly one tagged state, and that state fully defines which combination of step index, form data, and submission result are valid\u2014no two flags can be true at once and no field exists unless its state allows it.\u201d"
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "Equal",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "good",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Both solutions capture the invariant that the wizard occupies exactly one discrete state, so they rate equally on the principle, but Solution B pairs each tagged state with named transition helpers and exhaustiveness guidance, giving it a slight edge in maintainability and flexibility, which makes it the better all\u2011around implementation."
+      }
+    },
+    {
+      "skill": "ps-functional-core-imperative-shell",
+      "severity": "BLOCK",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "outstanding",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_mixed_logic",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Functional Core / Imperative Shell**\n\n- Split the query/update logic (side effects) into a thin im...",
+            "response_full": "**Functional Core / Imperative Shell**\n\n- Split the query/update logic (side effects) into a thin imperative wrapper and keep the pure calculation in a function.\n- Example:\n  ```javascript\n  function calculateNewStock(currentStock, soldQuantity) {\n    if (currentStock < soldQuantity) {\n      throw new Error('Insufficient stock');\n    }\n    return currentStock - soldQuantity;\n  }\n\n  async function updateStock(productId, soldQuantity) {\n    const product = await db.query('SELECT * FROM products WHERE id = ?', productId);\n    const newStock = calculateNewStock(product.stock, soldQuantity);\n    await db.execute('UPDATE products SET stock = ? WHERE id = ?', [newStock, productId]);\n    return newStock;\n  }\n  ```\n- `calculateNewStock` is the functional core (deterministic, no side effects); `updateStock` is the imperative shell (handles I/O).\n- If `db.query/execute` are asynchronous in your environment, keep the `await`s; otherwise they can be synchronous as before."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Functional Core**\n\n- Extracted the stock adjustment logic into `calculateNewStock(stock, soldQuant...",
+            "response_full": "**Functional Core**\n\n- Extracted the stock adjustment logic into `calculateNewStock(stock, soldQuantity)`, which is purely deterministic: it validates the inputs and returns the new stock (or throws when there isn\u2019t enough). No DB or side effects happen there.\n\n**Imperative Shell**\n\n- `updateStock(productId, soldQuantity)` now drives the side effects: it queries the product, calls the pure core, and writes the new stock back to the database.\n\n```javascript\n// PURE CORE: deterministic computation\nfunction calculateNewStock(currentStock, soldQuantity) {\n    if (soldQuantity < 0) {\n        throw new Error('Sold quantity must be non-negative');\n    }\n    if (currentStock < soldQuantity) {\n        throw new Error('Insufficient stock');\n    }\n    return currentStock - soldQuantity;\n}\n\n// IMPERATIVE SHELL: handles effects\nfunction updateStock(productId, soldQuantity) {\n    const product = db.query('SELECT * FROM products WHERE id = ?', productId);\n    const newStock = calculateNewStock(product.stock, soldQuantity);\n    db.execute('UPDATE products SET stock = ? WHERE id = ?', [newStock, productId]);\n    return newStock;\n}\n```\n\nNext steps you might consider:\n1. Add unit tests for `calculateNewStock` so the pure logic stays covered.\n2. Wrap the shell in a retry/logging layer if needed for resiliency."
+          }
+        },
+        {
+          "name": "identify_side_effects",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Function `validateAndLog` mixes validation (the functional core) with runtime effects: calling `co...",
+            "response_full": "- Function `validateAndLog` mixes validation (the functional core) with runtime effects: calling `console.error` and `logger.info` both mutate external state (emitting logs) and break referential transparency.  \n- Because the error/log calls depend on external systems instead of returning values, the function no longer guarantees the same result for the same input; it also becomes harder to test and reuse.  \n- According to the Functional Core principle, the computational part should stay pure and isolated; side effects like logging should be pushed to an outer layer (the imperative shell) so the core stays predictable."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "- **Issue**: `validateAndLog` mixes pure validation with logging, so it\u2019s not a pure \u201ccore\u201d function...",
+            "response_full": "- **Issue**: `validateAndLog` mixes pure validation with logging, so it\u2019s not a pure \u201ccore\u201d function; `console.error` and `logger.info` are side effects (they interact with the console/log system) and make the output dependent on the environment rather than just the `user` input. This violates the core principle that pure functions should only compute and return values without touching IO.\n- **Fix idea**: Split into two steps\u2014one pure `isValidEmail(user)` that just returns a boolean, and an imperative shell that handles logging based on that boolean (e.g., log the error or success outside the pure function)."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "good",
+        "option_b_rating": "outstanding",
+        "score": 100,
+        "reasoning": "Solution B keeps the business logic deterministic while adding extra validation and clearer layering, so its pure core is easier to test and the shell stays thin. Solution A already separates effects but lacks the additional rigor and explicit structure that makes B stand out."
+      }
+    },
+    {
+      "skill": "ps-illegal-states-unrepresentable",
+      "severity": "SUGGEST",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "transform_invalid_state",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Type Update**\n\n- Converted `Response` into a discriminated union so success states always include ...",
+            "response_full": "**Type Update**\n\n- Converted `Response` into a discriminated union so success states always include `data` and error states always include `errorMessage`, preventing both from coexisting.\n- Example:\n  ```ts\n  type Response =\n    | { status: 'success'; data: any }\n    | { status: 'error'; errorMessage: string };\n  ```\n\nLet me know if you also want to tighten `data`/`errorMessage` types (e.g., generics or stricter payloads)."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Core Principle Applied**\n- Replaced the primitive `status`/optional fields combo with a discrimina...",
+            "response_full": "**Core Principle Applied**\n- Replaced the primitive `status`/optional fields combo with a discriminated union so success and error states are distinct and statically enforced.\n- Each variant now carries only the data it needs: `Success` has `data`, `Error` has `message`, and no illegal combinations can be expressed.\n\n```\ntype Response =\n  | { kind: 'success'; data: any }\n  | { kind: 'error'; message: string }\n```\n\nNext steps you might consider: 1) Update any parsing/loading code to construct `Response` from raw payloads so the type invariant holds early. 2) Adjust consumer logic to pattern-match on `kind` instead of checking status strings and optional fields."
+          }
+        },
+        {
+          "name": "explain_parse_dont_validate",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Validation vs Parsing**\n\n- Validating data means checking that the incoming raw input obeys the ru...",
+            "response_full": "**Validation vs Parsing**\n\n- Validating data means checking that the incoming raw input obeys the rules your domain cares about: ranges, required fields, relational constraints, etc. It happens while the data is still in a general-purpose shape (e.g., JSON, query parameters). The goal is to catch bad input before you try to do anything with it.\n\n- Parsing into domain types is the act of transforming that validated raw data into your strongly typed structures (e.g., enums, records, value objects) so that the compiler/runtime can enforce invariants. Once parsed, the type system can make illegal states unrepresentable because only valid combinations exist in that type.\n\n- In short: validation is the guardrail that filters raw inputs, while parsing into domain types is the step that encodes those guarantees in types so downstream code can\u2019t even express invalid states."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Parsing vs. Validating**\n\n- Validating data means you receive raw inputs and then check them with ...",
+            "response_full": "**Parsing vs. Validating**\n\n- Validating data means you receive raw inputs and then check them with conditionals (e.g., `if (!id || status !== \"active\") throw`). It leaves you working with the original primitive shapes so you have to remember those checks everywhere else.\n- Parsing into domain types means you immediately transform the raw input into a tightly constrained type (e.g., `type ActiveUser = { status: \"active\"; id: UserId; }`). The parser either returns that type or fails, so downstream code can only work with guaranteed-valid states.\n- In short, validation is \u201ccheck then keep the same structure,\u201d whereas parsing is \u201cturn raw data into a new structure that can never represent an illegal state.\u201d"
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "Equal",
+        "quality_better": "Equal",
+        "overall_better": "Equal",
+        "option_a_rating": "good",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Both solutions replace the primitive status/optional fields pattern with a discriminated union that makes success and error states mutually exclusive, so they equally embody the principle and avoid runtime checks. Neither goes beyond that core change, so their maintainability and flexibility are on par. Without additional context, there\u2019s no clear reason to prefer one implementation over the other."
+      }
+    },
+    {
+      "skill": "ps-local-reasoning",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "regular",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_global_state_access",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Give `getFinalPrice` its own inputs instead of reading `window.APP_CONFIG`. Injection makes the depe...",
+            "response_full": "Give `getFinalPrice` its own inputs instead of reading `window.APP_CONFIG`. Injection makes the dependency explicit and keeps the function self-contained:\n\n```javascript\nfunction getFinalPrice(order, taxRate) {\n    return order.total * (1 + taxRate);\n}\n```\n\nCallers can still use the global config if needed, but this version is easy to reason about, test, and reuse."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "Make `taxRate` an explicit argument so the function no longer reaches for hidden globals\u2014it now simp...",
+            "response_full": "Make `taxRate` an explicit argument so the function no longer reaches for hidden globals\u2014it now simply multiplies the order total by whatever rate the caller supplies.\n\n```\nfunction getFinalPrice(order, taxRate) {\n    return order.total * (1 + taxRate);\n}\n```\n\nCallers should read the config (e.g., `window.APP_CONFIG.taxRate`) where they make business decisions and pass that value into `getFinalPrice`, keeping this helper self-contained and easy to test."
+          }
+        },
+        {
+          "name": "detect_hidden_dependencies",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Hidden Dependencies**\n\n- `db` is referenced but never declared or injected; the function relies on...",
+            "response_full": "**Hidden Dependencies**\n\n- `db` is referenced but never declared or injected; the function relies on a globally available `db` object (likely the database layer) without it being imported or parameterized. That coupling makes the module brittle and hard to test.\n- `auth` is imported, so that dependency is explicit\u2014but the code implicitly assumes `auth.isAdmin()` is synchronous and accessible; any state/environment that makes `auth` available must also be configured elsewhere.\n- The `deletePost` function assumes `db.posts.remove` exists and that calling it with `postId` performs deletion; there\u2019s no validation or error handling, so it silently depends on `db.posts.remove` behaving in a specific way.\n\nNo further hidden modules appear unless `db` is defined globally elsewhere."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Analysis**\n\n- `auth` is imported, so that dependency is explicit at the module level, but the func...",
+            "response_full": "**Analysis**\n\n- `auth` is imported, so that dependency is explicit at the module level, but the function assumes `auth.isAdmin()` can be called without being passed in\u2014`deletePost` relies on an implicit, globally available auth singleton rather than receiving the auth client as an argument, making it hard to test or reason about in isolation.\n- `db` is never declared or passed in; it\u2019s implicitly assumed to exist on some module/global scope. This hidden dependency on the database object means you can\u2019t understand or reuse `deletePost` without knowing where `db` comes from.\n- The function mutates external state (`db.posts.remove`) without exposing which datastore it\u2019s using, so readers must jump elsewhere to find or mock that dependency.\n\nFor Local Reasoning the missing piece is that `deletePost` needs both `auth` and `db` provided via its signature, e.g., `function deletePost(postId, authClient, postsRepo)`; right now those dependencies are hidden globals, reducing clarity and testability."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "Equal",
+        "quality_better": "Equal",
+        "overall_better": "Equal",
+        "option_a_rating": "regular",
+        "option_b_rating": "regular",
+        "score": 100,
+        "reasoning": "Both just explain that dependencies like `taxRate`, `auth`, and `db` should be injected without actually refactoring `deletePost` to accept them, so they demonstrate the principle only at a basic level. Neither solution removes the hidden globals, so their maintainability/testability remains similar. Because the explanations and shortcomings are nearly identical, neither one clearly outperforms the other."
+      }
+    },
+    {
+      "skill": "ps-minimize-mutation",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_mutating_argument",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Refactored `activateUser` so it now returns a new object with the updated `isActive` flag and `act...",
+            "response_full": "- Refactored `activateUser` so it now returns a new object with the updated `isActive` flag and `activatedAt` timestamp instead of mutating the input."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "Return a new user object so callers keep the original intact:\n\n```javascript\nfunction activateUser(u...",
+            "response_full": "Return a new user object so callers keep the original intact:\n\n```javascript\nfunction activateUser(user) {\n    return {\n        ...user,\n        isActive: true,\n        activatedAt: new Date()\n    };\n}\n```\n\n- Mutation stays local; the function name still signals intent.\n- Callers decide whether to replace their reference with the returned object."
+          }
+        },
+        {
+          "name": "identify_unsafe_mutation",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Unsafe mutation**\n\n- `process(list)` receives the same array instance, so any in-place modificatio...",
+            "response_full": "**Unsafe mutation**\n\n- `process(list)` receives the same array instance, so any in-place modifications (e.g., `push`, `splice`, reassigning elements) change `list`\u2019s contents before `console.log`.\n- Because `list` is shared by reference, the caller can\u2019t predict its state after `process` runs; that breaks encapsulation and can cause hard-to-trace bugs.\n- To keep it safe, either pass a copy (`process([...list])`) or ensure `process` never mutates its inputs (make it pure/immutable)."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "- The snippet is unsafe because `process(list)` may mutate the array that the caller still holds, so...",
+            "response_full": "- The snippet is unsafe because `process(list)` may mutate the array that the caller still holds, so even though `list` is declared `const`, its elements (the shared backing object) can change\u2014this violates the \u201cprefer immutable updates\u201d guideline and makes data flow unpredictable outside the function.  \n- To follow the skill, have `process` build and return a new array; the caller can then decide what to do with the fresh value while the original `list` stays unchanged. Example fix:  \n  ```javascript\n  function process(input) {\n      const next = [...input, 4]; // copy + update\n      return next;\n  }\n  const list = [1, 2, 3];\n  const newList = process(list);\n  // list remains [1, 2, 3]; newList reflects the change\n  ```  \n  This keeps mutation localized, explicit, and controlled, so callers can reason about state safely.  \n- No repo files were modified; only reasoning was applied."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "regular",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Solution A points out the mutation risk but doesn\u2019t show an immutable alternative, so it flags a problem without fully demonstrating the principle (regular). Solution B explicitly returns new objects/arrays, keeping mutations local and explicit, so it follows the principle solidly (good). Hence Solution B better satisfies both the mutation-control principle and overall code quality since it provides a maintainable, testable pattern that leaves shared state unchanged."
+      }
+    },
+    {
+      "skill": "ps-naming-as-design",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "refactor_generic_names",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Rename `userArray` to something like `userProfiles` (or `activeUsersList`, `pendingUserRecords`) s...",
+            "response_full": "- Rename `userArray` to something like `userProfiles` (or `activeUsersList`, `pendingUserRecords`) so the name describes what the collection holds rather than how it\u2019s stored.\n- Rename `handleData(data)` to a verb phrase that tells you why it runs, e.g., `processSubmittedUserData(data)` or `validateAndTransformUserData(data)`.\n- Rename `VALUE` to `MINIMUM_AGE_REQUIREMENT` (or `MINIMUM_AGE_LIMIT`) so the constant clearly documents its intent (minimum age of 10)."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "- Rename `userArray` to something like `registeredUsers` so the name encodes the domain role instead...",
+            "response_full": "- Rename `userArray` to something like `registeredUsers` so the name encodes the domain role instead of the fact it\u2019s an array.\n- Rename `handleData(data)` to a purpose-driven verb such as `processIncomingPayload(data)` (or even more specific if you know the domain\u2014e.g., `processCustomerSubmission`) so the name reveals what the function does, not that it \u201chandles\u201d data.\n- Replace `VALUE` with `MINIMUM_ELIGIBLE_AGE` (or `MINIMUM_VOTING_AGE`, etc., depending on the context) so the constant\u2019s name encodes the constraint it represents."
+          }
+        },
+        {
+          "name": "identify_naming_violations",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Naming as Design**\n\n- `saveUserAndLogActivity` bundles two separate responsibilities in one name, ...",
+            "response_full": "**Naming as Design**\n\n- `saveUserAndLogActivity` bundles two separate responsibilities in one name, which conflicts with the \u201cname forces single responsibility\u201d rule in `ps-naming-as-design`. The `And` signals that the routine is doing more than one thing; a well-named function should describe a single action (e.g., `saveUser` or `logActivity`) so the design and intent are obvious without reading the body.\n- Because the name combines persistence and logging, it doesn\u2019t encode the business intent or constraints\u2014readers must ask \u201cwhy are these things tied together?\u201d instead of seeing a clear story. Good names should reveal intent (purpose and why) rather than implementation details or sequences, and `saveUserAndLogActivity` leaves the relationship and order ambiguous."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Naming as Design**\n\n- `saveUserAndLogActivity` mixes responsibilities (saving + logging) so a sing...",
+            "response_full": "**Naming as Design**\n\n- `saveUserAndLogActivity` mixes responsibilities (saving + logging) so a single name can't capture a clear business intent; storing user data and recording activity are distinct concerns that should be separate functions (e.g., `saveUser` + `logActivityForUser`).\n- The \u201cAnd\u201d forces you to document implementation order instead of the real purpose; it hides constraints/invariants and makes it hard to reason about when to reuse or test each behavior independently.\n- Under the core skill principle, good names reveal design; this compound name reveals confusion about whether the module is about persistence, auditing, or both, so the design needs refactoring."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "Equal",
+        "quality_better": "Equal",
+        "overall_better": "Equal",
+        "option_a_rating": "good",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Both solutions apply the naming principle consistently by shifting names toward intent and constraints (e.g., user collections and age constants) and flagging the overloaded `saveUserAndLogActivity`. Neither introduces extra depth beyond the shared critique, so their adherence and maintainability are effectively tied, leaving them equally preferable."
+      }
+    },
+    {
+      "skill": "ps-policy-mechanism-separation",
+      "severity": "WARN",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "good",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "extract_hardcoded_policy",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Separate the \u201cwhat\u201d (policy) from the \u201chow\u201d (mechanism) by defining a reusable predicate for the pol...",
+            "response_full": "Separate the \u201cwhat\u201d (policy) from the \u201chow\u201d (mechanism) by defining a reusable predicate for the policy and letting the caller supply it while keeping the filtering logic generic.\n\n```javascript\nconst THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;\n\nconst isNotExpired = (now, item, maxAge = THIRTY_DAYS) => now - item.createdAt < maxAge;\n\nfunction filterItems(items, predicate, now = Date.now()) {\n    return items.filter(item => predicate(now, item));\n}\n\n// call site\nconst recentItems = filterItems(items, isNotExpired);\n```\n\n- `isNotExpired` encodes the retention policy (30 days by default) and can be swapped or parameterized without touching the filtering mechanism.\n- `filterItems` is the generic mechanism that only knows how to apply any predicate."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "- Created a descriptive `EXPIRATION_POLICY` object so the rule (\u201ckeep items younger than 30 days\u201d) l...",
+            "response_full": "- Created a descriptive `EXPIRATION_POLICY` object so the rule (\u201ckeep items younger than 30 days\u201d) lives outside the filtering code, satisfying the policy definition guidance.\n- Extracted a reusable `filterByAge(items, policy)` mechanism that takes any policy\u2019s `maxAgeMs` and compares it to a captured `now`, then reused it in `filterExpiredItems`, keeping the mechanism generic and policy-agnostic.\n\n```javascript\n// POLICY \u2013 business rules\nconst EXPIRATION_POLICY = {\n    maxAgeMs: 30 * 24 * 60 * 60 * 1000 // 30 days\n};\n\n// MECHANISM \u2013 reusable filtering logic\nfunction filterByAge(items, { maxAgeMs }) {\n    const now = Date.now();\n    return items.filter(item => (now - item.createdAt) < maxAgeMs);\n}\n\n// Usage ties the policy to the mechanism\nfunction filterExpiredItems(items) {\n    return filterByAge(items, EXPIRATION_POLICY);\n}\n```\n\nNext: 1) Add tests that exercise `filterByAge` with different policy objects to prove the mechanism works for multiple rules. 2) Consider exposing `EXPIRATION_POLICY` for configuration if different age thresholds are needed elsewhere."
+          }
+        },
+        {
+          "name": "design_retry_mechanism",
+          "baseline": {
+            "pass": true,
+            "response_preview": "Skill: ps-policy-mechanism-separation \u2014 request wants policy/rules (retry/backoff choice) clearly se...",
+            "response_full": "Skill: ps-policy-mechanism-separation \u2014 request wants policy/rules (retry/backoff choice) clearly separate from the reusable mechanism.\n\n- Policy: model the retry rules in a config object (`RetryPolicy`) that holds `max_attempts`, a predicate (`should_retry`) and a `BackoffStrategy` instance, keeping all business decisions outside the loop.\n- Mechanism: implement `RetryExecutor` (or a `retry_with_policy` function) that simply executes the operation, consults the policy for whether to continue, and delegates delay computation to the provided strategy.\n- Backoff strategies: define a `BackoffStrategy` interface (or abstract base) plus concrete implementations for `FixedBackoff` and `ExponentialBackoff`, so new strategies plug in without touching the executor.\n- Example flow: create policies that pair a strategy with a `should_retry` filter, hand them to the executor, and let the mechanism stay generic while the policy defines behavior.\n\n```python\nfrom dataclasses import dataclass\nfrom abc import ABC, abstractmethod\nfrom typing import Callable, Any\nimport time\n\nclass BackoffStrategy(ABC):\n    @abstractmethod\n    def delay(self, attempt: int, base_ms: int) -> float:\n        ...\n\nclass FixedBackoff(BackoffStrategy):\n    def delay(self, attempt: int, base_ms: int) -> float:\n        return base_ms / 1000\n\nclass ExponentialBackoff(BackoffStrategy):\n    def delay(self, attempt: int, base_ms: int) -> float:\n        delay_ms = base_ms * (2 ** (attempt - 1))\n        return delay_ms / 1000\n\n@dataclass\nclass RetryPolicy:\n    max_attempts: int\n    base_backoff_ms: int\n    should_retry: Callable[[Exception], bool]\n    backoff_strategy: BackoffStrategy\n\ndef retry_with_policy(operation: Callable[[], Any], policy: RetryPolicy) -> Any:\n    attempt = 0\n    while attempt < policy.max_attempts:\n        try:\n            attempt += 1\n            return operation()\n        except Exception as exc:\n            if attempt >= policy.max_attempts or not policy.should_retry(exc):\n                raise\n            time.sleep(policy.backoff_strategy.delay(attempt, policy.base_backoff_ms))\n```\n\nReusable mechanism (above) stays agnostic to the policy, while `RetryPolicy` instances determine \u201chow many tries,\u201d \u201cwhich errors to trust,\u201d and \u201cwhich backoff to use.\u201d \n\nNext steps:\n1. Add targeted unit tests that verify the executor respects `max_attempts` and delegates to each strategy.\n2. Wire the policy/strategy combo into the actual retries (e.g., HTTP client, queue worker) so infrastructure code remains policy-agnostic."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "**Retry Mechanism**\n\n- Skill: ps-policy-mechanism-separation \u2014 I kept business rules (policy) and th...",
+            "response_full": "**Retry Mechanism**\n\n- Skill: ps-policy-mechanism-separation \u2014 I kept business rules (policy) and the generic retry logic (mechanism) separate so new backoff strategies or thresholds can be swapped without touching the core loop.\n\n```ts\n// POLICY definitions\ntype BackoffStrategy = (attempt: number, baseDelayMs: number) => number\n\nconst FIXED_BACKOFF: BackoffStrategy = () => FixedRetryConfig.baseDelayMs\n\nconst EXPONENTIAL_BACKOFF: BackoffStrategy = (attempt, baseDelayMs) =>\n  Math.min(baseDelayMs * 2 ** (attempt - 1), ExponentialRetryConfig.maxDelayMs)\n\nconst FixedRetryConfig = {\n  maxAttempts: 3,\n  baseDelayMs: 500,\n  shouldRetry: (err: Error) => err instanceof NetworkError,\n  strategy: FIXED_BACKOFF,\n}\n\nconst ExponentialRetryConfig = {\n  maxAttempts: 5,\n  baseDelayMs: 250,\n  maxDelayMs: 5000,\n  shouldRetry: (err: Error) => err instanceof NetworkError,\n  strategy: EXPONENTIAL_BACKOFF,\n}\n\n// MECHANISM\nasync function retryWithPolicy<T>(\n  operation: () => Promise<T>,\n  policy: {\n    maxAttempts: number\n    baseDelayMs: number\n    shouldRetry: (error: Error) => boolean\n    strategy: BackoffStrategy\n  }\n): Promise<T> {\n  let attempt = 0\n  while (true) {\n    try {\n      attempt += 1\n      return await operation()\n    } catch (error) {\n      if (attempt >= policy.maxAttempts || !policy.shouldRetry(error as Error)) {\n        throw error\n      }\n      const delay = policy.strategy(attempt, policy.baseDelayMs)\n      await new Promise((resolve) => setTimeout(resolve, delay))\n    }\n  }\n}\n```\n\n- The mechanism is a single `retryWithPolicy` loop that only relies on policy data passed in (max attempts, backoff strategy, retry filter).  \n- Two policies (`FixedRetryConfig`, `ExponentialRetryConfig`) show how to swap rules without touching the mechanism; new strategies can be added via more `BackoffStrategy` implementations.\n- Next steps: add targeted unit tests for `retryWithPolicy` with mock operations and define more policy objects (e.g., jitter, circuit-breaker hooks) as needed."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "good",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Both solutions cleanly separate policy from mechanism, so they each merit a \u201cgood\u201d rating, but Solution B more explicitly models policy objects and strategy hooks, making the relevant rules and backoff behaviors easier to swap or test without touching the core loop, so it edges ahead in principle adherence, maintainability, and overall flexibility."
+      }
+    },
+    {
+      "skill": "ps-single-direction-data-flow",
+      "severity": "BLOCK",
+      "model": "gpt-5.1-codex-mini",
+      "baseline_rate": 100,
+      "skill_rate": 100,
+      "baseline_rating": "regular",
+      "skill_rating": "good",
+      "baseline_pass_count": "2/2",
+      "skill_pass_count": "2/2",
+      "improvement": 0,
+      "results": [
+        {
+          "name": "detect_circular_dependency",
+          "baseline": {
+            "pass": true,
+            "response_preview": "- Component A writes to Store X.\n- Store X notifies Component B of the change.\n- Component B\u2019s lifec...",
+            "response_full": "- Component A writes to Store X.\n- Store X notifies Component B of the change.\n- Component B\u2019s lifecycle then invokes Component A, which writes back to Store X.\n\nSo the cycle is **Component A \u2192 Store X \u2192 Component B \u2192 Component A \u2192 Store X**, meaning the update chain can loop indefinitely unless one of those steps is guarded (e.g., Component B avoids calling Component A during that lifecycle, or Component A checks if the store actually needs an update)."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "- Data flow trace: Component A owns Store X, writes to it; Store X notifies Component B; B\u2019s lifecyc...",
+            "response_full": "- Data flow trace: Component A owns Store X, writes to it; Store X notifies Component B; B\u2019s lifecycle then invokes an A function that writes Store X again. Because B\u2019s update calls back into A\u2019s Store update, the chain loops (A \u2192 Store X \u2192 B \u2192 A \u2192 Store X).\n- Fix: break the cycle by ensuring B only emits an event or callback that A listens to (without indirectly re-updating Store X inside B\u2019s lifecycle), or have B request the change through a parent-managed handler so Store X is updated just once by its owner."
+          }
+        },
+        {
+          "name": "refactor_bidirectional_sync",
+          "baseline": {
+            "pass": true,
+            "response_preview": "**Single Flow**\n\n- Introduce a single source of truth (`user` setter) that pushes the update to head...",
+            "response_full": "**Single Flow**\n\n- Introduce a single source of truth (`user` setter) that pushes the update to header/footer, then `onUserUpdate` simply updates that source.\n\n```javascript\nset user(user) {\n    this._user = user;\n    this.header.user = user;\n    this.footer.user = user;\n}\n\nget user() {\n    return this._user;\n}\n\nfunction onUserUpdate(user) {\n    this.user = user; // single write, downstream sync happens in the setter\n}\n```\n\n- If `header`/`footer` already react to `user` changes (e.g., via props), you can drop their direct sync calls entirely.\n- Next: ensure any downstream logic only reads from `this.user` so the flow stays unidirectional."
+          },
+          "skill": {
+            "pass": true,
+            "response_preview": "To keep the update flow unidirectional, make the parent (the owner of `user`) the only writer, and h...",
+            "response_full": "To keep the update flow unidirectional, make the parent (the owner of `user`) the only writer, and have the header/footer read from it instead of being pushed updates. For example:\n\n```javascript\nfunction setUser(user) {\n    this.user = user;\n    this.refreshChildren();\n}\n\nfunction refreshChildren() {\n    const sharedUserState = this.user;\n    this.header.render({ user: sharedUserState });\n    this.footer.render({ user: sharedUserState });\n}\n```\n\nNow `onUserUpdate` (or `setUser`) merely updates the owner state, and the header/footer are re-rendered with that source value. If `header` and `footer` are components, they simply accept `user` as a prop/parameter and emit events upward when they need changes, keeping data flowing down and events flowing up with no hidden synchronization."
+          }
+        }
+      ],
+      "judgment": {
+        "principle_better": "B",
+        "quality_better": "B",
+        "overall_better": "B",
+        "option_a_rating": "regular",
+        "option_b_rating": "good",
+        "score": 100,
+        "reasoning": "Solution A still hints at a cycle (B calling A via lifecycle) and resolves it only by centralizing writes in a setter, which sounds better than the loop but doesn\u2019t explicitly enforce the downstream-only contract; Solution B explicitly breaks the cycle by having the owner own the state and re-render children through props/events, so its flow is clearer and more maintainable."
+      }
+    }
+  ]
+}
