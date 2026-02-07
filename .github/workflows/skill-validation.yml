@@ -116,8 +116,8 @@ jobs:
           fi
 
           echo "Running evaluation..."
-          # Use trusted script
-          uv run --project trusted-scripts/tests --frozen trusted-scripts/tests/evaluator.py "${ARGS[@]}"
+          # Use trusted script with correct project path
+          uv run --project . --frozen trusted-scripts/tests/evaluator.py "${ARGS[@]}"
 
       - name: Upload results
         if: always()
