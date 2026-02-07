@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import tempfile
 
 
 def run_benchmark(provider: str, model: str, skill: str | None = None) -> bool:
@@ -145,7 +146,9 @@ def main() -> int:
     # Step 6: Push to orphan branch if requested
     if not args.no_push:
         print("\nPushing to orphan branch...")
-        if not push_to_orphan_branch(repo_path, output_dir, args.branch):
+        temp_dir = Path(tempfile.mkdtemp(prefix="benchmarks-site-"))
+        shutil.copytree(output_dir, temp_dir, dirs_exist_ok=True)
+        if not push_to_orphan_branch(repo_path, temp_dir, args.branch):
             print("Push to orphan branch failed")
             return 1
     else:
