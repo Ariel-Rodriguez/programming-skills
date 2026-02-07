@@ -47,3 +47,6 @@ scratch-*
 # CI/Validation Artifacts
 comment.md
 results/
+
+# Benchmark site output
+site/

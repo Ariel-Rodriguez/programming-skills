@@ -76,6 +76,14 @@ def _safe_model_for_id(model: str) -> str:
     return model.replace("/", "-")
 
 
+def _find_latest_summary(results_dir: Path) -> Path | None:
+    candidates = list(results_dir.glob("summary-*.json"))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
 def collect_and_generate(results_dir: Path, output_dir: Path) -> bool:
     """
     Collect benchmark data and generate HTML.
@@ -125,6 +133,7 @@ def main() -> int:
     parser.add_argument("--benchmarks-dir", help="Deprecated (unused)")
     parser.add_argument("--results-dir", help="Directory containing summary.json (default: tests/results)")
     parser.add_argument("--output-dir", help="Directory to write generated files")
+    parser.add_argument("--summary-path", help="Path to summary json (overrides results-dir)")
 
     args = parser.parse_args()
 
@@ -146,19 +155,31 @@ def main() -> int:
     else:
         print("Skipping benchmark run")
 
-    # Step 2: Create summary-<benchmark_id>.json in results directory
-    summary_path = results_dir / "summary.json"
+    # Step 2: Resolve summary input
+    if args.summary_path:
+        summary_path = Path(args.summary_path)
+    else:
+        summary_path = results_dir / "summary.json"
+        if not summary_path.exists():
+            latest = _find_latest_summary(results_dir)
+            if latest:
+                summary_path = latest
+
     if not summary_path.exists():
         print(f"Summary not found at {summary_path}")
         return 1
 
+    # Step 3: Ensure summary-<benchmark_id>.json exists
     timestamp = _load_summary_timestamp(summary_path)
     timestamp_id = _timestamp_for_id(timestamp)
     benchmark_id = f"{args.provider}-{_safe_model_for_id(args.model)}-{timestamp_id}"
     summary_out = results_dir / f"summary-{benchmark_id}.json"
-    shutil.copy2(summary_path, summary_out)
+    if summary_path.name == summary_out.name:
+        print(f"Using existing summary: {summary_out}")
+    else:
+        shutil.copy2(summary_path, summary_out)
 
-    # Step 3: Sync static site assets into output directory
+    # Step 4: Sync static site assets into output directory
     source_dir = repo_path / "src" / "pages" / "benchmarks"
     if not source_dir.exists():
         print(f"Static site source not found at {source_dir}")
@@ -173,13 +194,13 @@ def main() -> int:
         else:
             shutil.copy2(item, dest)
 
-    # Step 4: Generate dashboard data files
+    # Step 5: Generate dashboard data files
     print("\nGenerating dashboard data...")
     if not collect_and_generate(results_dir, output_dir):
         print("Dashboard generation failed")
         return 1
 
-    # Step 5: Push to orphan branch if requested
+    # Step 6: Push to orphan branch if requested
     if not args.no_push:
         print("\nPushing to orphan branch...")
         if not push_to_orphan_branch(repo_path, output_dir, args.branch):

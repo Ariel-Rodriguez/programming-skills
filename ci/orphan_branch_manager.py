@@ -80,7 +80,7 @@ class OrphanBranchManager:
         Returns:
             True if branch exists, False otherwise
         """
-        result = self._run_git("rev-parse", "--verify", self.branch_name, "2>/dev/null")
+        result = self._run_git("show-ref", "--verify", f"refs/heads/{self.branch_name}")
         return result.success
 
     def create_orphan_branch(self) -> GitResult:
