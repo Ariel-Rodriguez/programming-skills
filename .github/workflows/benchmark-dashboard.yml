@@ -1,0 +1,89 @@
+name: Benchmark Dashboard
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Provider (ollama, copilot, gemini)"
+        required: true
+        type: choice
+        options:
+          - ollama
+          - copilot
+          - gemini
+      model:
+        description: "Model name (e.g., qwen-coder-next:cloud)"
+        required: true
+        type: string
+      skill:
+        description: "Optional specific skill to test"
+        required: false
+        type: string
+
+jobs:
+  run-benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: workspace
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Run benchmark
+        working-directory: workspace
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          # Install dependencies
+          uv sync --project tests
+          # Run benchmark
+          uv run --project tests tests/evaluator.py \
+            --provider ${{ inputs.provider }} \
+            --model ${{ inputs.model }} \
+            --judge \
+            --verbose \
+            --report
+          # Rename artifact for clarity
+          if [ -d tests/results ]; then
+            ARTIFACT_NAME="benchmark-${{ inputs.provider }}-${{ inputs.model }}-$(date +%Y%m%d-%H%M%S)"
+            mv tests/results "tests/${ARTIFACT_NAME}"
+          fi
+
+      - name: Generate dashboard
+        working-directory: workspace
+        run: |
+          uv run --project tests python3 ci/publish_benchmarks.py \
+            --provider ${{ inputs.provider }} \
+            --model ${{ inputs.model }} \
+            --branch benchmark-history
+
+  deploy-pages:
+    needs: run-benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: workspace
+
+      - name: Checkout benchmark data
+        uses: actions/checkout@v4
+        with:
+          ref: benchmark-history
+          path: benchmark-data
+
+      - name: Verify deployment
+        run: |
+          echo "Benchmark data directory contents:"
+          ls -la benchmark-data/docs/
+          echo ""
+          echo "GitHub Pages will be served from benchmark-history branch"
+          echo "Dashboard will be available at:"
+          echo "https://${{ github.repository }}/index.html"
