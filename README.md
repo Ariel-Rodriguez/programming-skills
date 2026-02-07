@@ -15,12 +15,9 @@ Adopting these skills measurably changes the output of AI models, shifting them 
 
 ## Installation
 
-Select your platform for specific setup instructions:
+See:
 
-- [Cursor](docs/install/cursor.md)
-- [Antigravity](docs/install/antigravity.md)
-- [GitHub Copilot](docs/install/copilot.md)
-- [Claude](docs/install/claude.md)
+- [Install Instructions](docs/install-instructions.md)
 
 ## How it Works
 
@@ -51,11 +48,17 @@ Every skill is validated against a rigorous testing suite found in the `tests/` 
 
 [Read our Case Study on Judge Fairness](docs/judge-fairness-case-study.md) to see how the system fairly evaluates architectural quality, even when it means failing the Skill model.
 
-## [Evaluation Results](https://ariel-rodriguez.github.io/programming-skills/)
+## Evaluation Results
+
+Dashboard:
+
+```
+https://ariel-rodriguez.github.io/programming-skills/
+```
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) - Repository design & structure
+- [Architecture](docs/specs/architecture.md) - Repository design & structure
 - [Contributing](docs/contributing.md) - How to add/modify skills & benchmarks
 - [AI Prompt Wrapper](docs/ai-prompt-wrapper.md) - Configure your AI assistant
 - [Changelog](CHANGELOG.md) - Version history & skill changes
