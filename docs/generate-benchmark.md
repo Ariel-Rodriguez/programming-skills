@@ -55,9 +55,7 @@ tests/data-history/
 This copies `src/pages/benchmarks/` into the output root and generates JSON data.
 
 ```bash
-python3 ci/publish_benchmarks.py \
-  --no-benchmark \
-  --output-dir site/benchmarks
+python3 ci/publish_benchmarks.py --no-benchmark --no-push --output-dir site/benchmarks
 ```
 
 Output is created at:
@@ -70,7 +68,11 @@ site/benchmarks/
   data/<benchmark_id>/data.json
 ```
 
+Rerun without `--no-push` to push the orphan branch, and skip following
+
 ## 3) Publish the Orphan Branch
+
+Either rerun without `--no-push` or push manually:
 
 ```bash
 git checkout benchmark-history

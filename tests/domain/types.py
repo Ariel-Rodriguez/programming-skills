@@ -23,6 +23,7 @@ class Provider(Enum):
     OLLAMA = "ollama"
     COPILOT = "copilot"
     CODEX = "codex"
+    GEMINI = "gemini"
 
 
 @dataclass(frozen=True)

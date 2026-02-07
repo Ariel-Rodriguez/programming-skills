@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_mixed_logic",
-        "input": "mixed_logic_case.js",
+        "name": "user_registration_refactor",
+        "spec": "Our `register_user` function is proving brittle. It mixes data validation, password hashing, database insertion, and sending a welcome email all in a single procedural flow.\n\nWe want to be able to verify the *decisions* the system makes (e.g., \"Given this input, we *should* save X and email Y\") without actually performing the side effects during the test.\n\nredesign this flow to make the business decisions purely testable.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution separate the decision-making (pure) from the execution (imperative)?"
         }
     },
     {
-        "name": "identify_side_effects",
-        "input": "Identify the side effects in this function and explain why they violate the Functional Core principle:\n\n```javascript\nfunction validateAndLog(user) {\n    if (!user.email.includes('@')) {\n        console.error('Invalid email');\n        return false;\n    }\n    logger.info('User validated');\n    return true;\n}\n```",
+        "name": "side_effect_audit",
+        "spec": "Analyze this function:\n\n```javascript\nfunction checkAccess(user) {\n  if (user.isBanned) {\n    auditLogger.log(`Banned access attempt: ${user.id}`);\n    return false;\n  }\n  return true;\n}\n```\n\nIs this function easy to test in parallel? Why or why not?",
         "expected": {
-            "focus": "Does the explanation correctly identify which parts have side effects and which are pure?"
+            "focus": "Does the answer identify the external logger call as a side effect that complicates testing?"
         }
     }
 ]

@@ -1,16 +1,16 @@
 [
     {
-        "name": "extract_hardcoded_policy",
-        "input": "extract_hardcoded_policy.js",
+        "name": "uploader_flexibility",
+        "spec": "Our `S3Uploader` class currently hardcodes a 30-second timeout and 3 retries. \n\nWe now need to use it for 1GB video files (which need 1 hour timeout) and for tiny 1KB JSON files (which need 500ms timeout).\n\nRedesign the class so that the *rules* (timeouts, retries) are separated from the *work* (uploading bytes).",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution accept a config/policy object or strategy function?"
         }
     },
     {
-        "name": "design_retry_mechanism",
-        "input": "Design a retry mechanism that accepts a policy strategy for different backoff types (Fixed vs Exponential).",
+        "name": "cache_expiration_strategy",
+        "spec": "We have a simple `Cache` class. Currently, it deletes items if they are older than 1 hour.\n\nWe want to support different expiration rules for different data types (e.g., \"Expire if not accessed in 10 mins\" vs \"Expire at midnight specific timezone\").\n\nShow how you would restructure the Cache to separate the storage mechanism from the expiration logic.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the Cache delegate the \"should I expire?\" decision to a separate policy?"
         }
     }
 ]

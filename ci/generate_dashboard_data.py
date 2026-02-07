@@ -127,7 +127,10 @@ def _benchmark_id_from_parts(provider: str, model: str, timestamp: str, fallback
         stamp = stamp[:15]
     if not stamp and fallback_stamp:
         stamp = fallback_stamp
-    return f"{provider}-{model}-{stamp or 'unknown'}"
+    
+    # Sanitize model name for Windows paths (no colons)
+    safe_model = str(model).replace(":", "-")
+    return f"{provider}-{safe_model}-{stamp or 'unknown'}"
 
 
 def collect_all_benchmarks(history_dir: Path) -> list[dict]:

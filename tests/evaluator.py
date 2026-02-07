@@ -36,7 +36,7 @@ from services import (
 )
 
 # Adapter imports
-from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter, CodexCLIAdapter
+from adapters import RealFileSystem, OllamaAdapter, CopilotCLIAdapter, CodexCLIAdapter, GeminiCLIAdapter
 
 
 def _timestamp_id() -> str:
@@ -77,7 +77,7 @@ def main() -> int:
     parser.add_argument("--model", help="Model to use (default: llama3.2:latest)")
     parser.add_argument(
         "--provider",
-        choices=["ollama", "copilot", "codex"],
+        choices=["ollama", "copilot", "codex", "gemini"],
         default="ollama",
         help="Model provider"
     )
@@ -87,6 +87,7 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="Use LLM judge for semantic evaluation")
     parser.add_argument("--verbose", action="store_true", help="Detailed output")
     parser.add_argument("--ollama-cloud", action="store_true", help="Use Ollama Cloud instead of local")
+    parser.add_argument("--base-url", help="Base URL for model API (default: http://localhost:11434 for Ollama)")
     parser.add_argument("--history-dir", help="Custom history directory (default: tests/data-history)")
     args = parser.parse_args()
     
@@ -94,12 +95,16 @@ def main() -> int:
     fs = RealFileSystem()
     
     # Configuration (Policy)
-    skills_dir = Path("skills")
+    # Resolve skills directory relative to this script (tests/evaluator.py -> root/skills)
+    root_dir = Path(__file__).parent.parent
+    skills_dir = root_dir / "skills"
     
     if args.provider == "ollama":
         provider = Provider.OLLAMA
     elif args.provider == "copilot":
         provider = Provider.COPILOT
+    elif args.provider == "gemini":
+        provider = Provider.GEMINI
     else:
         provider = Provider.CODEX
 
@@ -108,8 +113,10 @@ def main() -> int:
     else:
         if provider == Provider.CODEX:
             model_name = "gpt-5.1-codex-mini"
+        elif provider == Provider.GEMINI:
+            model_name = "gemini-2.5-flash-exp"
         else:
-            model_name = "llama3.2:latest"
+            model_name = "rnj-1:8b"
 
     if args.history_dir:
         history_dir = Path(args.history_dir)
@@ -153,10 +160,23 @@ def main() -> int:
         # Copilot models have larger context windows
         num_ctx = 64000
     
+    # Determine base URL
+    if args.base_url:
+        base_url = args.base_url
+    elif provider == Provider.OLLAMA:
+        # Default to cloud URL if cloud flag is set or model implies cloud
+        is_cloud = args.ollama_cloud or model_name.lower().endswith("cloud")
+        if is_cloud:
+            base_url = "https://ollama.com"
+        else:
+            base_url = "http://localhost:11434"
+    else:
+        base_url = "http://localhost:11434/v1"
+
     config = ModelConfig(
         provider=provider,
         model_name=model_name,
-        base_url="http://localhost:11434/v1",
+        base_url=base_url,
         num_ctx=num_ctx
     )
     
@@ -166,6 +186,8 @@ def main() -> int:
         model_port = OllamaAdapter(use_cloud=args.ollama_cloud if args.ollama_cloud else None, model_name=model_name)
     elif provider == Provider.COPILOT:
         model_port = CopilotCLIAdapter()
+    elif provider == Provider.GEMINI:
+        model_port = GeminiCLIAdapter()
     else:
         model_port = CodexCLIAdapter()
     
@@ -200,6 +222,11 @@ def main() -> int:
     if provider == Provider.CODEX:
         if not model_port.is_available(config):
             print("Error: Codex CLI not available. Install Codex CLI and sign in with ChatGPT.")
+            return 1
+    
+    if provider == Provider.GEMINI:
+        if not model_port.is_available(config):
+            print("Error: Gemini CLI not available. Install with: bun add -g @google/gemini-cli")
             return 1
     
     # Create history directory

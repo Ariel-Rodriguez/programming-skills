@@ -75,14 +75,11 @@ def _load_tests_from_json(json_path: Path, fs: FileSystemPort, skill_path: Path)
         elif isinstance(data, dict):
             raw_tests = data.get('tests', [])
         
-        # Transform to TestCase objects with external file injection
+        # Transform to TestCase objects
         test_cases = []
         for test_data in raw_tests:
-            input_prompt = test_data.get('input', '')
-            
-            # Check if input references an external file
-            # Pattern: single line with filename (no newlines)
-            input_prompt = _inject_external_files(input_prompt, skill_path, fs)
+            # Prefer 'spec' (new format), fallback to 'input' (legacy)
+            input_prompt = test_data.get('spec') or test_data.get('input', '')
             
             test_cases.append(TestCase(
                 name=test_data.get('name', 'Unnamed'),
@@ -95,98 +92,4 @@ def _load_tests_from_json(json_path: Path, fs: FileSystemPort, skill_path: Path)
     except json.JSONDecodeError as e:
         return Failure(f"Invalid JSON in {json_path}", {"error": str(e)})
 
-
-def _extract_tests_from_markdown(content: str) -> list[TestCase]:
-    """
-    Extract test cases from markdown benchmark scenarios section.
-    
-    Pure function: No IO, just string parsing.
-    
-    Args:
-        content: Markdown content
-        
-    Returns:
-        List of TestCase objects
-    """
-    tests = []
-    
-    # Find benchmark scenarios section
-    scenario_section = re.search(
-        r'## Benchmark Scenarios\s*\n(.*?)(?=\n##|$)',
-        content,
-        re.DOTALL
-    )
-    
-    if not scenario_section:
-        return tests
-    
-    scenario_content = scenario_section.group(1)
-    
-    # Extract JSON blocks
-    json_blocks = re.findall(r'```json\n(.*?)\n```', scenario_content, re.DOTALL)
-    
-    for block in json_blocks:
-        try:
-            data = json.loads(block)
-            
-            if isinstance(data, list):
-                for test_data in data:
-                    tests.append(TestCase(
-                        name=test_data.get('name', 'Unnamed'),
-                        input_prompt=test_data.get('input', ''),
-                        expected=test_data.get('expected', {})
-                    ))
-            elif isinstance(data, dict):
-                tests.append(TestCase(
-                    name=data.get('name', 'Unnamed'),
-                    input_prompt=data.get('input', ''),
-                    expected=data.get('expected', {})
-                ))
-        except json.JSONDecodeError:
-            # Skip invalid JSON blocks
-            continue
-    
-    return tests
-
-
-def _inject_external_files(input_text: str, skill_path: Path, fs: FileSystemPort) -> str:
-    """
-    Inject external file contents into input text.
-    
-    Looks for references to files in the skill directory and replaces them with content.
-    Pattern: If a line looks like a filename and the file exists, inject its content.
-    
-    Args:
-        input_text: Input text that may reference files
-        skill_path: Path to skill directory
-        fs: Filesystem port
-        
-    Returns:
-        Input text with file contents injected
-    """
-    # Split by lines to check for file references
-    lines = input_text.split('\n')
-    result_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        
-        # Check if this line looks like a filename reference
-        # (single word ending in .js, .py, .java, etc., no spaces)
-        if stripped and not ' ' in stripped and '.' in stripped:
-            # Try to load it as a file from skill directory
-            file_path = skill_path / stripped
-            if fs.exists(file_path) and fs.is_file(file_path):
-                file_result = fs.read_text(file_path)
-                if isinstance(file_result, Success):
-                    # Replace the filename with the actual content in a code block
-                    ext = file_path.suffix.lstrip('.')
-                    result_lines.append(f"\n```{ext}")
-                    result_lines.append(file_result.value)
-                    result_lines.append("```\n")
-                    continue
-        
-        # Keep the line as-is if not a file reference
-        result_lines.append(line)
-    
-    return '\n'.join(result_lines)
+    # Note: _inject_external_files removed directly as per refactor plan

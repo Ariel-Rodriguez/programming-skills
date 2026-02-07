@@ -1,16 +1,16 @@
 [
     {
-        "name": "refactor_swallowed_error",
-        "input": "refactor_swallowed_error.js",
+        "name": "auth_error_handling",
+        "spec": "The current `login` function returns `null` if anything goes wrong (user missing, wrong password, db down). This leads to a generic \"Login Failed\" error on the frontend, which frustrates users who might just have a typo, and confuses support teams when the DB is actually down.\n\nRefactor the return values/mechanism so the caller can definitively distinguish between:\n1. Invalid Credentials (user actionable)\n2. Account Locked (user actionable)\n3. System/Network Failure (retryable)\n\nProvide the code for the logic and the data structures used.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the solution return structured error info (e.g., error codes, types) instead of a generic null/false?"
         }
     },
     {
-        "name": "design_validation_flow",
-        "input": "Design a user registration flow that handles: 1. Invalid email, 2. Database connection failure, 3. User already exists. Apply Error Handling Design.",
+        "name": "robust_registration_design",
+        "spec": "We need to process a batch of user imports. Some might have invalid data, others might fail due to database constraint violations.\n\nwrite a processor function that handles these failures appropriately:\n- Invalid data: Skip and report.\n- DB Constraint: Skip and report.\n- DB Connection Loss: Stop processing and throw/alert.\n\nShow how you distinguish these cases in code.",
         "expected": {
-            "focus": "Evaluate whether the response demonstrates the skill principle"
+            "focus": "Does the code differentiate between recoverable item-level errors and fatal batch-level errors?"
         }
     }
 ]
