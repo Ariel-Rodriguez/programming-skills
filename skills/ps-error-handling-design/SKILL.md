@@ -4,7 +4,7 @@ description: Design systems with explicit error handling. Avoid throwing excepti
 severity: WARN
 ---
 
-# Principle
+## Principle
 
 Treat error handling as a first-class design concern, not an afterthought:
 
