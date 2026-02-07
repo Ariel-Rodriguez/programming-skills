@@ -23,6 +23,11 @@ class CodexCLIAdapter:
         Local Reasoning: All parameters explicit.
         Naming as Design: Clear this invokes external CLI.
         """
+        system_note = (
+            "Provide a direct final answer only. Do not list options. "
+            "Do not claim to edit files; you are in a read-only sandbox."
+        )
+
         cmd = [
             "codex",
             "exec",
@@ -30,7 +35,7 @@ class CodexCLIAdapter:
             "read-only",
             "--model",
             config.model_name,
-            prompt,
+            system_note + "\n\n" + prompt,
         ]
 
         try:

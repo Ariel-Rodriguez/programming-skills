@@ -20,6 +20,7 @@
         max-height: 300px;
         overflow-y: auto;
         border: 1px solid #dee2e6;
+        scroll-behavior: auto;
       }
       .code-container.expanded {
         max-height: none;
@@ -56,6 +57,22 @@
       }
       #detailModal .modal-dialog {
         max-width: 90%;
+      }
+      .response-details summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .response-block {
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 10px;
+        white-space: pre-wrap;
+      }
+      .code-caption {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 6px;
       }
     </style>
   </head>
@@ -269,6 +286,11 @@
                 >
                   Expand
                 </button>
+                <div class="code-caption">Showing extracted code blocks if present.</div>
+                <details class="response-details mt-2">
+                  <summary>Show full response (Baseline)</summary>
+                  <div class="response-block mt-2" id="response-before"></div>
+                </details>
               </div>
 
               <div class="code-section">
@@ -285,6 +307,11 @@
                 >
                   Expand
                 </button>
+                <div class="code-caption">Showing extracted code blocks if present.</div>
+                <details class="response-details mt-2">
+                  <summary>Show full response (With Skill)</summary>
+                  <div class="response-block mt-2" id="response-after"></div>
+                </details>
               </div>
             </div>
           </div>

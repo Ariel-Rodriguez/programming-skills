@@ -1,5 +1,6 @@
 let allData = null;
 let flatSkills = [];
+let scrollSyncGuard = false;
 
 function getDataSrc() {
   return document.body.dataset.benchmarksSrc || "benchmarks.json";
@@ -32,6 +33,41 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function extractCodeBlocks(text) {
+  if (!text) return "";
+  const blocks = [];
+  const regex = /```[a-zA-Z0-9_-]*\\n([\\s\\S]*?)```/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    blocks.push(match[1].trim());
+  }
+  if (blocks.length === 0) {
+    return text;
+  }
+  return blocks.join("\\n\\n// ---\\n\\n");
+}
+
+function normalizeTestHeaders(text) {
+  if (!text) return "";
+  return text
+    .split("\\n")
+    .map((line) =>
+      line.startsWith("// Test:")
+        ? "// === " + line.replace("// ", "") + " ==="
+        : line
+    )
+    .join("\\n");
+}
+
+function syncScroll(containerA, containerB) {
+  if (!containerA || !containerB) return;
+  if (scrollSyncGuard) return;
+  scrollSyncGuard = true;
+  const ratio = containerA.scrollTop / (containerA.scrollHeight - containerA.clientHeight || 1);
+  containerB.scrollTop = ratio * (containerB.scrollHeight - containerB.clientHeight);
+  scrollSyncGuard = false;
 }
 
 function clearSelect(selectEl, defaultLabel) {
@@ -230,6 +266,8 @@ function showDetails(index) {
   const reasoningEl = document.getElementById("modal-reasoning");
   const codeBeforeEl = document.getElementById("code-before");
   const codeAfterEl = document.getElementById("code-after");
+  const responseBeforeEl = document.getElementById("response-before");
+  const responseAfterEl = document.getElementById("response-after");
 
   if (beforeRatingEl) beforeRatingEl.textContent = beforeRating;
   if (afterRatingEl) afterRatingEl.textContent = afterRating;
@@ -237,10 +275,16 @@ function showDetails(index) {
   if (scoreEl) scoreEl.textContent = score;
   if (reasoningEl)
     reasoningEl.innerHTML = escapeHtml(reasoning).replace(/\n/g, "<br>");
-  if (codeBeforeEl)
-    codeBeforeEl.textContent = skill.before_code || "// No code generated";
-  if (codeAfterEl)
-    codeAfterEl.textContent = skill.after_code || "// No code generated";
+
+  const beforeFull = skill.before_code || "// No code generated";
+  const afterFull = skill.after_code || "// No code generated";
+  const beforeCode = normalizeTestHeaders(extractCodeBlocks(beforeFull));
+  const afterCode = normalizeTestHeaders(extractCodeBlocks(afterFull));
+
+  if (codeBeforeEl) codeBeforeEl.textContent = beforeCode;
+  if (codeAfterEl) codeAfterEl.textContent = afterCode;
+  if (responseBeforeEl) responseBeforeEl.textContent = beforeFull;
+  if (responseAfterEl) responseAfterEl.textContent = afterFull;
 
   const modalEl = document.getElementById("detailModal");
   if (modalEl) {
@@ -248,6 +292,13 @@ function showDetails(index) {
     modal.show();
     if (window.Prism) {
       Prism.highlightAllUnder(modalEl);
+    }
+
+    const beforeContainer = document.getElementById("modal-before-code");
+    const afterContainer = document.getElementById("modal-after-code");
+    if (beforeContainer && afterContainer) {
+      beforeContainer.onscroll = () => syncScroll(beforeContainer, afterContainer);
+      afterContainer.onscroll = () => syncScroll(afterContainer, beforeContainer);
     }
   }
 }
