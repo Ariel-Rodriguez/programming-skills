@@ -2,6 +2,10 @@
 
 Language-agnostic AI agent skills that enforce fundamental programming principles. This repository provides specific, granular instructions that enable AI coding assistants to produce significantly higher-quality code that adheres to robust engineering standards.
 
+| Dashboard Explorer | Code Comparison | Judge Reasoning |
+| :---: | :---: | :---: |
+| ![Dashboard](docs/img/dashboard.png) | ![Code Comparison](docs/img/compare-code.png) | ![Judge Results](docs/img/compare-judge-results.png) |
+
 Adopting these skills measurably changes the output of AI models, shifting them from generating merely functional code to producing architecturally sound solutions.
 
 ## Table of Contents

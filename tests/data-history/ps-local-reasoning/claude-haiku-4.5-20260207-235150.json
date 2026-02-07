@@ -1,0 +1,61 @@
+{
+  "skill": "ps-local-reasoning",
+  "severity": "WARN",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "spaghetti_dependencies",
+      "input": "The `calculate_invoice_total(invoice_id)` function is hard to debug. To know what it will return, you have to check the state of the Global Feature Flags, the Session Singleton, and the current system time.\n\nRewrite this function so that its behavior is completely deterministic based *only* on its input arguments.",
+      "expected": {
+        "focus": "Does the refactor pass the feature flags, session data, and time in as arguments?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "Let me check the current directory structure:\n\nThe directory appears empty. Since you cannot edit fi...",
+        "response_full": "Let me check the current directory structure:\n\nThe directory appears empty. Since you cannot edit files in this read-only sandbox, here is the refactored function:\n\n## Refactored `calculate_invoice_total()` Function\n\n**Original approach (non-deterministic):**\n- Depends on global feature flags\n- Depends on session singleton state\n- Depends on system time\n- Hard to debug and test\n\n**Refactored approach (deterministic):**\n\n```python\ndef calculate_invoice_total(invoice_id, invoice_data):\n    \"\"\"\n    Calculate invoice total based purely on invoice data.\n    \n    Args:\n        invoice_id: str - The invoice identifier\n        invoice_data: dict - Complete invoice data containing:\n            - items: list of dicts with 'amount' and 'quantity'\n            - tax_rate: float - Tax rate (0.0 to 1.0)\n            - discounts: list of dicts with 'amount' and 'type'\n            - currency: str - Currency code\n            - invoice_date: datetime - Invoice date (replaces system time dependency)\n            - apply_loyalty_discount: bool (replaces feature flag dependency)\n    \n    Returns:\n        dict: {\n            'subtotal': float,\n            'tax': float,\n            'total': float,\n            'currency': str\n        }\n    \"\"\"\n    subtotal = sum(item['amount'] * item['quantity'] for item in invoice_data.get('items', []))\n    \n    # Apply discounts\n    discount_total = sum(d['amount'] for d in invoice_data.get('discounts', []))\n    subtotal -= discount_total\n    \n    # Apply loyalty discount if explicitly enabled in input\n    if invoice_data.get('apply_loyalty_discount', False):\n        subtotal *= 0.95  # 5% loyalty discount\n    \n    # Calculate tax based on provided rate\n    tax = subtotal * invoice_data.get('tax_rate', 0.0)\n    \n    # Calculate total\n    total = subtotal + tax\n    \n    return {\n        'subtotal': round(subtotal, 2),\n        'tax': round(tax, 2),\n        'total': round(total, 2),\n        'currency': invoice_data.get('currency', 'USD')\n    }\n```\n\n**Key improvements:**\n1. **Explicit parameters** - All data needed is passed via `invoice_data` argument\n2. **No global dependencies** - Feature flags, singleton state, and system time are now inputs\n3. **Fully testable** - Same inputs always produce same outputs\n4. **Debuggable** - Complete input visible in function call, no hidden state"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "I cannot edit files in this read-only sandbox, so I cannot directly rewrite the function in the code...",
+        "response_full": "I cannot edit files in this read-only sandbox, so I cannot directly rewrite the function in the codebase. However, here's how the `calculate_invoice_total` function should be refactored according to the Local Reasoning principle:\n\n**Current (problematic):**\n```javascript\nfunction calculate_invoice_total(invoice_id) {\n  const invoice = fetchInvoice(invoice_id)\n  const flags = GLOBAL_FEATURE_FLAGS  // Hidden dependency\n  const user = SESSION.currentUser    // Hidden dependency\n  const now = Date.now()              // Hidden dependency\n  \n  let total = invoice.items.sum(i => i.price)\n  if (flags.applyDiscount) {\n    total *= user.discountRate\n  }\n  if (now > invoice.dueDate) {\n    total *= 1.1 // Late fee\n  }\n  return total\n}\n```\n\n**Refactored (explicit dependencies):**\n```javascript\nfunction calculate_invoice_total(invoice, discountRate, appliesDiscount, currentTime, invoiceDueDate) {\n  let total = invoice.items.sum(i => i.price)\n  \n  if (appliesDiscount) {\n    total *= discountRate\n  }\n  \n  if (currentTime > invoiceDueDate) {\n    total *= 1.1 // Late fee\n  }\n  \n  return total\n}\n\n// Caller handles all state\nconst invoice = fetchInvoice(invoice_id)\nconst total = calculate_invoice_total(\n  invoice,\n  SESSION.currentUser.discountRate,\n  GLOBAL_FEATURE_FLAGS.applyDiscount,\n  Date.now(),\n  invoice.dueDate\n)\n```\n\n**Key improvements:**\n- All dependencies are explicit parameters\n- Function is fully deterministic and testable in isolation\n- No jumping between files to understand behavior\n- Hidden state moved to the caller"
+      }
+    },
+    {
+      "name": "hidden_api_call",
+      "input": "A developer wrote a `User.save()` method. It looks like it just saves to the database, but secretly it also makes an HTTP call to a CRM system if the user is a VIP. This causes the test suite to hang randomly.\n\nWhy is this design problematic for someone reading the code for the first time? How would you fix it to make the side effect explicit?",
+      "expected": {
+        "focus": "Does the solution propose passing the CRM service as a dependency or returning an instruction to sync?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "## The Core Problem\n\nThis design violates the **Principle of Least Surprise**. A developer reading `...",
+        "response_full": "## The Core Problem\n\nThis design violates the **Principle of Least Surprise**. A developer reading `User.save()` expects it to only persist data to the database. The hidden HTTP call is a **violation of the method's contract** \u2014 it does more than its name implies. This causes:\n\n1. **Unintended test failures** - Callers don't mock the HTTP dependency, causing network hangs\n2. **Unpredictable performance** - A database write suddenly becomes dependent on network latency\n3. **Hidden bugs** - Conditional logic (only for VIP) makes the side effect even harder to discover\n4. **Violated Single Responsibility Principle** - The method owns two concerns: data persistence + external notification\n\n## How to Fix It\n\n**Move the side effect out of `save()` and make it explicit:**\n\n```javascript\n// Option 1: Separate method (simplest)\nuser.save();  // Only saves to database\nif (user.isVIP) {\n  user.notifyCRM();  // Explicit, visible side effect\n}\n\n// Option 2: Event-driven (most scalable)\nuser.save();  // Emits 'user.saved' event\n// Elsewhere, subscribe: on('user.saved', (user) => { \n//   if (user.isVIP) crmService.notify(user); \n// })\n\n// Option 3: Service layer (cleanest architecture)\nuserService.saveAndNotify(user);  // Method name is honest about what it does\n```\n\nThe key: **Make side effects part of the visible API contract**. If `User.save()` has consequences beyond the database, callers need to see it in the code they write. This is why frameworks like Django recommend service layers and why React encourages explicit effect handling (useEffect)."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Why This Design Violates Local Reasoning\n\n**The core problem**: A reader looking at `User.save()` ...",
+        "response_full": "# Why This Design Violates Local Reasoning\n\n**The core problem**: A reader looking at `User.save()` sees a method name implying simple database persistence, but the actual behavior includes a hidden HTTP call to an external CRM system. This creates several violations of local reasoning:\n\n1. **Method signature lies** - `save()` doesn't reveal it does more than save\n2. **Hidden dependency** - The CRM service access is buried inside the method, not visible as a dependency\n3. **Implicit behavior triggered by state** - Whether the HTTP call executes depends on checking VIP status internally (global/external state access)\n4. **Side effects from nowhere** - Tests hang because the side effect is completely invisible; developers don't know to mock it\n5. **Requires jumping files** - To understand why tests fail, you must trace through the implementation to discover the CRM call\n\n**Result**: New developers or those maintaining tests waste time debugging mysterious hangs instead of understanding the code immediately.\n\n---\n\n# How to Fix It: Make the Side Effect Explicit\n\n**Option A: Separate the Concerns**\n```javascript\n// Clear what each method does\nuser.saveToDatabase();\nif (user.isVIP()) {\n  crmService.syncUser(user);  // Called explicitly, visible at call site\n}\n```\n\n**Option B: Explicit Parameter (Dependency Injection)**\n```javascript\n// Dependency injected, side effect visible in signature\nuser.save(database, { syncWithCRM: crmService });\n\n// Inside save():\n// - database.persist(user)\n// - if (syncWithCRM && user.isVIP()) syncWithCRM.sync(user)\n```\n\n**Option C: Declarative Configuration**\n```javascript\n// Make sync behavior a parameter, not hidden logic\nuser.save({ \n  persistence: database,\n  crmSync: crmService  // Explicitly passed; reader knows this might make HTTP calls\n});\n```\n\n**Why these work**: All dependencies and side effects become visible at the call site. Tests can mock `crmService`, new developers understand immediately what `save()` actually does, and the code is understandable *in isolation*."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "A",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution A correctly makes dependencies explicit by grouping them in an `invoice_data` object, which is practical and maintainable. Solution B demonstrates superior adherence to the Local Reasoning principle by using individual explicit parameters\u2014the function signature itself reveals every dependency without requiring inspection of a grouped object. While Solution A's grouped approach is more maintainable for long parameter lists, Solution B precisely aligns with the principle's core tenet: 'Function signature shows exactly what it needs.' Solution B also provides superior clarity for local reasoning since dependencies are immediately visible at the call site."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

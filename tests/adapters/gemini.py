@@ -29,14 +29,17 @@ class GeminiCLIAdapter:
             "--prompt", prompt
         ]
 
+        import tempfile
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                timeout=300,
-            )
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=600,
+                    cwd=tmpdir,  # ISOLATION
+                )
 
             if result.returncode != 0:
                 stderr = result.stderr.strip()
@@ -51,8 +54,8 @@ class GeminiCLIAdapter:
 
         except subprocess.TimeoutExpired:
             return Failure(
-                "Gemini CLI timeout after 300 seconds",
-                {"timeout": 300},
+                "Gemini CLI timeout after 600 seconds",
+                {"timeout": 600},
             )
         except FileNotFoundError:
             return Failure(
@@ -73,7 +76,7 @@ class GeminiCLIAdapter:
             result = subprocess.run(
                 ["gemini", "--version"],
                 capture_output=True,
-                timeout=5,
+                timeout=10,
             )
             return result.returncode == 0
         except Exception:

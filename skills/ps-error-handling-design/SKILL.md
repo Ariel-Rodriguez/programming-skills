@@ -2,6 +2,7 @@
 name: ps-error-handling-design
 description: Design systems with explicit error handling. Avoid throwing exceptions for domain errors. Use Result/Either types to make errors part of the function signature.
 severity: WARN
+version: 1.0.0
 ---
 
 ## Principle

@@ -86,9 +86,11 @@ def run_evaluation(
         skill_name=skill.name,
         severity=skill.severity,
         model=config.model_name,
+        skill_version=skill.version,
         baseline_results=tuple(baseline_results),
         skill_results=tuple(skill_results),
-        judgment=judgment
+        judgment=judgment,
+        judge_error=(use_judge and judgment is None)
     )
 
 
@@ -127,6 +129,8 @@ def _run_single_test(
             test_name=test.name,
             passed=False,
             response="",
+            input=test.input_prompt,
+            expected=test.expected,
             failure_reason=result.error_message
         )
     
@@ -140,6 +144,8 @@ def _run_single_test(
         test_name=test.name,
         passed=passed,
         response=response,
+        input=test.input_prompt,
+        expected=test.expected,
         failure_reason=reason
     )
 
@@ -205,47 +211,57 @@ def _run_judge_evaluation(
         with_skill_response=with_skill_response         # Always B
     )
     
-    # Call model
-    result = model_port.call(prompt, config)
+    # Call model with retry logic
+    attempts = 0
+    max_attempts = 2
+    current_prompt = prompt
     
-    if is_failure(result):
-        if verbose:
-            print(f"      [JUDGE ERROR] {result.error_message}")
-        return None
-    
-    # Parse judgment
-    try:
-        judgment_response = parse_judgment_response(result.value)
+    while attempts < max_attempts:
+        attempts += 1
+        result = model_port.call(current_prompt, config)
         
-        # Calculate deterministic score based on test pass rates
-        # Score = how many tests passed with the skill version
-        with_skill_passed = sum(1 for r in skill_results if r.passed)
-        total_tests = len(skill_results)
-        deterministic_score = (with_skill_passed / total_tests * 100) if total_tests > 0 else 0
+        if is_failure(result):
+            if verbose:
+                print(f"      [JUDGE ERROR] Attempt {attempts}: {result.error_message}")
+            return None
         
-        # Create judgment with deterministic score, not vibes
-        judgment = JudgmentResult(
-            principle_better=judgment_response.principle_better,
-            quality_better=judgment_response.quality_better,
-            overall_better=judgment_response.overall_better,
-            option_a_rating=judgment_response.option_a_rating,
-            option_b_rating=judgment_response.option_b_rating,
-            score=int(deterministic_score),
-            reasoning=judgment_response.reasoning
-        )
-        
-        if verbose:
-            overall_better = judgment.overall_better
-            if overall_better == 'B':
-                imp_label = "yes"
-            elif overall_better == 'A':
-                imp_label = "no"
+        # Parse judgment
+        try:
+            judgment_response = parse_judgment_response(result.value)
+            
+            # Calculate deterministic score based on test pass rates
+            with_skill_passed = sum(1 for r in skill_results if r.passed)
+            total_tests = len(skill_results)
+            deterministic_score = (with_skill_passed / total_tests * 100) if total_tests > 0 else 0
+            
+            # Create judgment with deterministic score
+            judgment = JudgmentResult(
+                principle_better=judgment_response.principle_better,
+                quality_better=judgment_response.quality_better,
+                overall_better=judgment_response.overall_better,
+                option_a_rating=judgment_response.option_a_rating,
+                option_b_rating=judgment_response.option_b_rating,
+                score=int(deterministic_score),
+                reasoning=judgment_response.reasoning
+            )
+            
+            if verbose:
+                overall_better = judgment.overall_better
+                imp_label = "yes" if overall_better == 'B' else ("no" if overall_better == 'A' else "neutral")
+                print(f"      [JUDGE] improvement: {imp_label} (score: {judgment.score}/100 = {with_skill_passed}/{total_tests} tests)")
+            return judgment
+            
+        except ValueError as e:
+            if verbose:
+                print(f"      [JUDGE PARSE ERROR] Attempt {attempts}: {e}")
+            
+            if attempts < max_attempts:
+                if verbose:
+                    print("      [JUDGE RETRY] Requesting correction...")
+                # Update prompt for next attempt with error feedback
+                correction_feedback = f"\n\nERROR FROM LAST ATTEMPT: {str(e)}\nYour previous response could not be parsed. Please respond ONLY with the corrected JSON object matching the requested schema strictly."
+                current_prompt = prompt + correction_feedback
             else:
-                imp_label = "neutral"
-            print(f"      [JUDGE] improvement: {imp_label} (score: {judgment.score}/100 = {with_skill_passed}/{total_tests} tests)")
-        return judgment
-    except ValueError as e:
-        if verbose:
-            print(f"      [JUDGE PARSE ERROR] {e}")
-        return None
+                return None
+    return None
 

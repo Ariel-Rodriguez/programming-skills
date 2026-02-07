@@ -147,36 +147,44 @@ def parse_judgment_response(response: str) -> JudgmentResult:
     # 1. Strip thought blocks (reasoning models like DeepSeek-R1)
     cleaned_response = re.sub(r'<thought>.*?</thought>', '', response, flags=re.DOTALL | re.IGNORECASE)
     
-    # 2. Extract JSON from response
-    json_str = ""
+    # 2. Find all potential { ... } blocks
+    # We use a non-greedy match for the content to find individual objects
+    candidates = re.findall(r'(\{.*?\})', cleaned_response, re.DOTALL)
     
-    # Try 1: Markdown code blocks
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_response, re.DOTALL)
-    if json_match:
-        json_str = json_match.group(1)
-    else:
-        # Try 2: Find content between first { and LAST }
-        # This handles cases where the model appends extra text
-        start_idx = cleaned_response.find('{')
-        end_idx = cleaned_response.rfind('}')
-        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            json_str = cleaned_response[start_idx:end_idx + 1]
-        else:
-            raise ValueError(f"No JSON found in response. Response slice: {response[:200]}")
+    # If no candidates found with non-greedy, try a broader greedy match as fallback
+    if not candidates:
+        json_match = re.search(r'(\{.*\})', cleaned_response, re.DOTALL)
+        if json_match:
+            candidates = [json_match.group(1)]
     
-    # 3. Parse JSON
-    try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        # Fallback: maybe there's extra data at the end? 
-        # json.loads can sometimes fail if there's trailing garbage
+    if not candidates:
+        raise ValueError(f"No JSON-like structures found in response. Response slice: {response[:200]}")
+    
+    data = None
+    last_error = None
+    
+    # 3. Try to parse each candidate and validate it
+    for candidate in candidates:
         try:
-            # Try to parse only the first valid JSON object
-            import json as pyjson
-            decoder = pyjson.JSONDecoder()
-            data, _ = decoder.raw_decode(json_str)
-        except Exception:
-            raise ValueError(f"Invalid JSON in response: {e}. Extracted string: {json_str[:100]}...") from e
+            # Clean up potential markdown formatting within the block if any
+            clean_candidate = candidate.strip()
+            item = json.loads(clean_candidate)
+            
+            # Basic validation: check for AT LEAST one required field
+            # This distinguishes our target JSON from random {braces} in code snippets
+            required_fields = ["option_a_rating", "option_b_rating", "overall_better", "reasoning"]
+            if any(field in item for field in required_fields):
+                data = item
+                break
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+            
+    if data is None:
+        if last_error:
+            raise ValueError(f"Invalid JSON in response: {last_error}. Candidates found: {len(candidates)}")
+        else:
+            raise ValueError(f"No valid judgment JSON found in {len(candidates)} candidates.")
     
     # Validate and extract fields
     option_a_rating = data.get("option_a_rating", "vague").lower().strip()

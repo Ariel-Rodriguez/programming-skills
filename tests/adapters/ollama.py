@@ -73,7 +73,7 @@ class OllamaAdapter:
                 headers=headers,
                 method='POST'
             )
-            with urllib.request.urlopen(req, timeout=300) as response:
+            with urllib.request.urlopen(req, timeout=600) as response:
                 res = json.loads(response.read().decode('utf-8'))
                 content = res['message']['content']
                 return Success(content)

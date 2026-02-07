@@ -2,6 +2,7 @@
 name: ps-policy-mechanism-separation
 description: Business rules must be separated from execution mechanisms. Use when reviewing code with hardcoded rules in loops or handlers.
 severity: WARN
+version: 1.0.0
 ---
 
 # Policy Mechanism Separation

@@ -47,31 +47,36 @@ class CopilotCLIAdapter:
             prompt
         ]
         
+        import tempfile
+        
         try:
             # Pass environment variables including GITHUB_TOKEN
             env = os.environ.copy()
             
-            # If gh copilot not available, try standalone copilot CLI
-            result = subprocess.run(
-                cmd_cli,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=300,
-                env=env,
-                input="\n"  # Auto-select first option
-            )
-            
-            # Try gh copilot extension (better for CI with PATs)
-            if result.returncode != 0 and "gh: unknown command" in result.stderr:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # If gh copilot not available, try standalone copilot CLI
                 result = subprocess.run(
-                    cmd_gh,
+                    cmd_cli,
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
-                    timeout=300,
-                    env=env
+                    timeout=600,
+                    env=env,
+                    cwd=tmpdir,  # ISOLATION: prevents discovery of project skills
+                    input="\n"  # Auto-select first option
                 )
+                
+                # Try gh copilot extension (better for CI with PATs)
+                if result.returncode != 0 and "gh: unknown command" in result.stderr:
+                    result = subprocess.run(
+                        cmd_gh,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        timeout=600,
+                        env=env,
+                        cwd=tmpdir  # ISOLATION
+                    )
             
             if result.returncode != 0:
                 stderr = result.stderr.strip()
@@ -86,8 +91,8 @@ class CopilotCLIAdapter:
         
         except subprocess.TimeoutExpired:
             return Failure(
-                "Copilot CLI timeout after 300 seconds",
-                {"timeout": 300}
+                "Copilot CLI timeout after 600 seconds",
+                {"timeout": 600}
             )
         except FileNotFoundError:
             return Failure(
@@ -110,7 +115,7 @@ class CopilotCLIAdapter:
             result = subprocess.run(
                 ["copilot", "--version"],
                 capture_output=True,
-                timeout=5
+                timeout=10
             )
             return result.returncode == 0
         except Exception:

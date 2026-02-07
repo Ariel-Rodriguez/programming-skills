@@ -1,0 +1,60 @@
+{
+  "skill": "ps-explicit-state-invariants",
+  "severity": "BLOCK",
+  "model": "rnj-1:8b",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "regular",
+  "skill_rating": "good",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "results": [
+    {
+      "name": "ui_state_flags_bug",
+      "input": "Our UI component tracks data loading with three separate flags: `isLoading`, `isSuccess`, and `isError`. \n\nWe keep receiving bug reports where the \"Loading...\" spinner is visible *on top of* the Error message (isLoading=true, isError=true). \n\nRedesign the state structure to make this UI bug impossible to represent in data.",
+      "expected": {
+        "focus": "Does the solution combine the flags into a single status field or union type?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To prevent the scenario where both `isLoading` and `isError` are true simultaneously, we can redesig...",
+        "response_full": "To prevent the scenario where both `isLoading` and `isError` are true simultaneously, we can redesign the state structure by introducing a new state flag that represents the loading state more accurately.\n\nHere's a possible redesign:\n\n1. **Introduce a new state flag**: `isPending` to represent the loading state.\n2. **Remove the `isLoading` flag** since `isPending` will handle the loading state.\n3. **Update the logic** to ensure that `isError` can only be true when `isPending` is false.\n\nHere's how the new state structure would look:\n\n```python\n# Initial state\nstate = {\n    \"isPending\": False,  # Represents the loading state\n    \"isSuccess\": False,  # Represents successful data loading\n    \"isError\": False    # Represents error state\n}\n\n# Example transitions\n# Starting the loading process\nstate[\"isPending\"] = True\nstate[\"isSuccess\"] = False\nstate[\"isError\"] = False\n\n# Simulating a successful load\nstate[\"isPending\"] = False\nstate[\"isSuccess\"] = True\nstate[\"isError\"] = False\n\n# Simulating an error\nstate[\"isPending\"] = False\nstate[\"isSuccess\"] = False\nstate[\"isError\"] = True\n```\n\nWith this redesign, it's impossible to have both `isPending` and `isError` as true at the same time, thus preventing the UI bug where the \"Loading...\" spinner is visible on top of the Error message."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# State Redesign: Eliminate Impossible States\n\n## Problem\nThe current state structure allows invalid...",
+        "response_full": "# State Redesign: Eliminate Impossible States\n\n## Problem\nThe current state structure allows invalid combinations:\n- `isLoading: true` AND `isError: true` (spinner over error)\n- `isLoading: false` AND `isSuccess: false` AND `isError: false` (no state)\n\n## Solution: Explicit States\n\n### New State Structure\n```typescript\ntype LoadingState =\n  | { type: 'idle' }\n  | { type: 'loading' }\n  | { type: 'success'; data: T }\n  | { type: 'error'; message: string }\n```\n\n### Implementation\n\n```typescript\n// Replace boolean flags with explicit states\ninterface ComponentState {\n  state: LoadingState\n}\n\n// Example usage:\nfunction render(state: ComponentState): string {\n  switch (state.state.type) {\n    case 'idle':\n      return 'Click to load'\n    case 'loading':\n      return 'Loading...'\n    case 'success':\n      return displayData(state.state.data)\n    case 'error':\n      return `Error: ${state.state.message}`\n  }\n}\n\n// Valid transitions:\nfunction startLoading(state: ComponentState): ComponentState {\n  return { state: { type: 'loading' } }\n}\n\nfunction succeed(state: ComponentState, data: T): ComponentState {\n  return { state: { type: 'success', data } }\n}\n\nfunction fail(state: ComponentState, message: string): ComponentState {\n  return { state: { type: 'error', message } }\n}\n```\n\n## Benefits\n\n1. **Impossible States Eliminated**\n   - Cannot be `loading` AND `error`\n   - Cannot be `idle` AND `success`\n   - Cannot be `error` AND `success`\n\n2. **Type Safety**\n   - Compiler enforces valid transitions\n   - No more defensive checks needed\n\n3. **Clear Semantics**\n   - State names reflect real meaning\n   - No more \"isLoading\" flag that's sometimes true sometimes false\n\n4. **Maintainable**\n   - Valid transitions are explicit\n   - No more \"what if\" comments in code\n   - Clear contract for consumers\n\n## Migration Path\n\n1. **Define new state structure**\n2. **Update all state transitions**\n3. **Update consumers to use new state**\n4. **Add type guards if needed**\n5. **Remove old boolean flags**\n\n## Testing\n\nAdd unit tests to verify impossible states cannot occur:\n```typescript\ntest('cannot be loading and error', () => {\n  const state: ComponentState = { state: { type: 'loading' } }\n  expect(state.state.type).not.toBe('error')\n})\n\ntest('cannot be success and error', () => {\n  const state: ComponentState = { state: { type: 'success', data: {} } }\n  expect(state.state.type).not.toBe('error')\n})\n```\n\n## Documentation\n\nUpdate component documentation to reflect new state:\n```\nState: LoadingState\n  | { type: 'idle' }            // No active request\n  | { type: 'loading' }         // Active request in progress\n  | { type: 'success'; data: T } // Request completed successfully\n  | { type: 'error'; message: string } // Request failed\n```\n\n## Migration Checklist\n\n1. [ ] Update state structure\n2. [ ] Update all state transitions\n3. [ ] Update consumers\n4. [ ] Add type guards if needed\n5. [ ] Remove old boolean flags\n6. [ ] Add unit tests\n7. [ ] Update documentation"
+      }
+    },
+    {
+      "name": "wizard_step_dependency",
+      "input": "We are building a checkout wizard. Step 2 (Shipping) requires the address from Step 1 (Contact). Step 3 (Payment) requires the shipping method from Step 2.\n\nCurrently, developers often try to render the Payment screen with an empty address, causing a crash. \n\nDefine a data structure for this wizard that enforces these dependencies. It should be a compile-time (or runtime structure) error to try to access Payment info if Shipping info doesn't exist.",
+      "expected": {
+        "focus": "Does the data structure nest the steps or use a state machine logic to prevent out-of-order execution?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "To enforce these dependencies, we can use a state management pattern with a well-defined state machi...",
+        "response_full": "To enforce these dependencies, we can use a state management pattern with a well-defined state machine. Here's a conceptual implementation using TypeScript, which enforces the dependencies at compile time:\n\n```typescript\ntype Address = {\n  street: string;\n  city: string;\n  state: string;\n  zip: string;\n};\n\ntype ShippingMethod = 'standard' | 'express';\n\ntype ContactInfo = {\n  address: Address;\n};\n\ntype ShippingInfo = {\n  method: ShippingMethod;\n};\n\ntype PaymentInfo = {\n  // Payment details\n};\n\ntype CheckoutState = {\n  contact: ContactInfo | null;\n  shipping: ShippingInfo | null;\n  payment: PaymentInfo | null;\n};\n\nclass CheckoutWizard {\n  private state: CheckoutState = {\n    contact: null,\n    shipping: null,\n    payment: null,\n  };\n\n  setContact(contact: ContactInfo) {\n    this.state.contact = contact;\n  }\n\n  setShipping(shipping: ShippingInfo) {\n    if (!this.state.contact) {\n      throw new Error(\"Cannot set shipping without contact info\");\n    }\n    this.state.shipping = shipping;\n  }\n\n  setPayment(payment: PaymentInfo) {\n    if (!this.state.shipping) {\n      throw new Error(\"Cannot set payment without shipping info\");\n    }\n    this.state.payment = payment;\n  }\n\n  getPayment(): PaymentInfo {\n    if (!this.state.payment) {\n      throw new Error(\"Payment info not available\");\n    }\n    return this.state.payment;\n  }\n}\n\n// Usage example:\nconst wizard = new CheckoutWizard();\n\n// This will throw an error\ntry {\n  wizard.setPayment({ /* ... */ });\n} catch (e) {\n  console.error(e.message); // \"Cannot set payment without shipping info\"\n}\n\n// Correct usage:\nwizard.setContact({ address: { /* ... */ } });\nwizard.setShipping({ method: 'standard' });\nwizard.setPayment({ /* ... */ });\n```\n\nThis implementation ensures that you cannot set the payment information without first setting the contact and shipping information. The `CheckoutWizard` class enforces these dependencies at runtime, preventing the crash caused by trying to access payment information without shipping information."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "```python\n# Define the wizard state structure with explicit invariants\nclass WizardState:\n    def __...",
+        "response_full": "```python\n# Define the wizard state structure with explicit invariants\nclass WizardState:\n    def __init__(self):\n        self.contact_info: Optional[ContactInfo] = None\n        self.shipping_info: Optional[ShippingInfo] = None\n        self.payment_info: Optional[PaymentInfo] = None\n\n    def set_contact_info(self, contact_info: ContactInfo):\n        self.contact_info = contact_info\n\n    def set_shipping_info(self, shipping_info: ShippingInfo):\n        self.shipping_info = shipping_info\n\n    def set_payment_info(self, payment_info: PaymentInfo):\n        # Can only set payment info if shipping info exists\n        if self.shipping_info is None:\n            raise ValueError(\"Cannot set payment info without shipping info\")\n        self.payment_info = payment_info\n\n    def can_access_payment(self) -> bool:\n        return self.shipping_info is not None\n\n# Usage example\nwizard = WizardState()\nwizard.set_contact_info(ContactInfo(...))\nwizard.set_shipping_info(ShippingInfo(...))\n# Now we can safely set payment info\nwizard.set_payment_info(PaymentInfo(...))\n```\n\nThis structure enforces the dependency between steps:\n1. Contact info is independent\n2. Shipping info depends on contact info (implicitly through the wizard state)\n3. Payment info depends on shipping info\n\nThe `can_access_payment` method ensures we can't access payment info without shipping info, and the `set_payment_info` method enforces this dependency at runtime."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "regular",
+    "option_b_rating": "good",
+    "score": 100,
+    "reasoning": "Solution B is better because it fully implements the principle by explicitly defining state transitions and invariants, eliminating impossible states. Solution A only partially addresses the issue by introducing a new state structure but doesn't fully enforce the principle. Solution B demonstrates mastery with precise implementation, clear state management, and comprehensive testing, making it more maintainable and testable."
+  },
+  "timestamp": "2026-02-07T22:55:27",
+  "provider": "ollama"
+}

@@ -207,6 +207,7 @@ def collect_all_benchmarks(history_dir: Path) -> list[dict]:
 
         skill_data = {
             'skill_name': skill_name,
+            'skill_version': data.get('skill_version', '1.0.0'),
             'provider': provider,
             'model': model,
             'timestamp': timestamp,
@@ -216,7 +217,18 @@ def collect_all_benchmarks(history_dir: Path) -> list[dict]:
             'reasoning': extract_judgment_reasoning(judgment) if judgment else 'No reasoning provided',
             'before_code': before_code,
             'after_code': after_code,
-            'judgment': judgment
+            'judgment': judgment,
+            'judge_error': data.get('judge_error', False),
+            'tests': [
+                {
+                    'name': t.get('name', 'unknown'),
+                    'input': t.get('input', ''),
+                    'expected': t.get('expected', {}),
+                    'baseline_response': t.get('baseline', {}).get('response_full', ''),
+                    'skill_response': t.get('skill', {}).get('response_full', '')
+                }
+                for t in test_results
+            ]
         }
         benchmark['skills'].append(skill_data)
 
@@ -260,35 +272,56 @@ def build_aggregated_data(benchmarks: list[dict]) -> dict:
             skill_names.add(skill.get('skill_name', 'unknown'))
         provider_models.add((benchmark.get('provider', ''), benchmark.get('model', '')))
 
-    # Count improvements
-    total_skills = 0
-    improvements = 0
-    regressions = 0
-    neutral = 0
-
+    # 1. Track latest run per Model + Skill
+    model_skill_latest: dict[tuple[str, str], dict] = {}
+    
     for benchmark in benchmarks:
+        model = benchmark.get('model', 'unknown')
         for skill in benchmark.get('skills', []):
-            total_skills += 1
-            if skill.get('improvement') == 'yes':
-                improvements += 1
-            elif skill.get('improvement') == 'no':
-                regressions += 1
-            else:
-                neutral += 1
+            skill_name = skill.get('skill_name', 'unknown')
+            key = (model, skill_name)
+            
+            # Since benchmarks are sorted by timestamp desc in collect_all_benchmarks,
+            # the first one we see for a key is the latest.
+            if key not in model_skill_latest:
+                model_skill_latest[key] = skill
 
-    # Build summary
-    summary = {
-        'total_benchmarks': len(benchmarks),
-        'total_skills': total_skills,
-        'improvements': improvements,
-        'regressions': regressions,
-        'neutral': neutral,
-        'improvement_rate': round((improvements / total_skills * 100) if total_skills > 0 else 0, 1)
-    }
+    # 2. Group by model to generate leaderboard
+    model_stats: dict[str, dict] = {}
+    for (model, skill_name), skill_data in model_skill_latest.items():
+        if model not in model_stats:
+            model_stats[model] = {
+                'model': model,
+                'provider': skill_data.get('provider', 'unknown'),
+                'total_tested': 0,
+                'improvements': 0,
+                'improvement_rate': 0
+            }
+        
+        stats = model_stats[model]
+        stats['total_tested'] += 1
+        if skill_data.get('improvement') == 'yes':
+            stats['improvements'] += 1
+
+    # 3. Finalize leaderboard
+    leaderboard = []
+    for model_name, stats in model_stats.items():
+        if stats['total_tested'] > 0:
+            stats['improvement_rate'] = round((stats['improvements'] / stats['total_tested'] * 100), 1)
+        leaderboard.append(stats)
+    
+    # Sort leaderboard by rate desc, then total tested desc
+    leaderboard.sort(key=lambda x: (x['improvement_rate'], x['total_tested']), reverse=True)
+
+    # 4. Global summary (still useful for general totals)
+    total_benchmarks = len(benchmarks)
 
     return {
         'benchmarks': benchmarks,
-        'summary': summary,
+        'summary': {
+            'total_benchmarks': total_benchmarks,
+            'leaderboard': leaderboard
+        },
         'unique_skills': sorted(list(skill_names)),
         'provider_models': sorted(list(provider_models))
     }

@@ -37,6 +37,7 @@ class Skill:
     description: str
     content: str
     severity: Severity
+    version: str = "1.0.0"
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,8 @@ class TestResult:
     test_name: str
     passed: bool
     response: str
+    input: str = ""
+    expected: dict = field(default_factory=dict)
     failure_reason: str = ""
     
     @property
@@ -109,7 +112,9 @@ class EvaluationResult:
     model: str
     baseline_results: tuple[TestResult, ...]
     skill_results: tuple[TestResult, ...]
+    skill_version: str = "1.0.0"
     judgment: "JudgmentResult | None" = None  # Optional LLM judge evaluation
+    judge_error: bool = False  # True if judge was requested but failed
     
     @property
     def baseline_pass_rate(self) -> int:

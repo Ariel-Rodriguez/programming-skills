@@ -1,0 +1,61 @@
+{
+  "skill": "ps-functional-core-imperative-shell",
+  "severity": "BLOCK",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "user_registration_refactor",
+      "input": "Our `register_user` function is proving brittle. It mixes data validation, password hashing, database insertion, and sending a welcome email all in a single procedural flow.\n\nWe want to be able to verify the *decisions* the system makes (e.g., \"Given this input, we *should* save X and email Y\") without actually performing the side effects during the test.\n\nredesign this flow to make the business decisions purely testable.",
+      "expected": {
+        "focus": "Does the solution separate the decision-making (pure) from the execution (imperative)?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Redesign: Decision/Effect Separation\n\nRestructure `register_user` into a **two-phase pattern**:\n\n1...",
+        "response_full": "# Redesign: Decision/Effect Separation\n\nRestructure `register_user` into a **two-phase pattern**:\n\n1. **Pure Decision Phase** \u2014 returns a command object describing what *should* happen\n2. **Effect Execution Phase** \u2014 executes the command (database, email, etc.)\n\n```python\nfrom dataclasses import dataclass\nfrom typing import Union\n\n# Domain decisions (pure, testable)\n@dataclass\nclass RegisterCommand:\n    user_id: str\n    username: str\n    email: str\n    password_hash: str\n\n@dataclass\nclass ValidationError:\n    field: str\n    message: str\n\ndef decide_registration(username: str, email: str, password: str) -> Union[RegisterCommand, ValidationError]:\n    \"\"\"Pure function: business logic only, no side effects\"\"\"\n    \n    # Validation decisions\n    if len(username) < 3:\n        return ValidationError(\"username\", \"Too short\")\n    if \"@\" not in email:\n        return ValidationError(\"email\", \"Invalid\")\n    if len(password) < 8:\n        return ValidationError(\"password\", \"Too weak\")\n    \n    # Hashing is deterministic here (or inject a pure hash function)\n    password_hash = hash_password(password)\n    user_id = generate_id()\n    \n    # Return decision: \"we should execute this command\"\n    return RegisterCommand(\n        user_id=user_id,\n        username=username,\n        email=email,\n        password_hash=password_hash\n    )\n\n# Execution layer (testable by mocking)\ndef execute_registration(command: RegisterCommand, db, emailer):\n    \"\"\"Executes the decision\"\"\"\n    db.insert_user(command.user_id, command.username, command.email, command.password_hash)\n    emailer.send_welcome(command.email, command.username)\n    return command.user_id\n```\n\n**Testing the decisions (no side effects):**\n```python\ndef test_rejects_short_username():\n    result = decide_registration(\"ab\", \"test@example.com\", \"password123\")\n    assert isinstance(result, ValidationError)\n    assert result.field == \"username\"\n\ndef test_creates_command_for_valid_input():\n    result = decide_registration(\"alice\", \"alice@example.com\", \"securepass123\")\n    assert isinstance(result, RegisterCommand)\n    assert result.username == \"alice\"\n    # No database touched, no email sent\n```\n\n**Testing execution (with mocks):**\n```python\ndef test_saves_user_and_emails():\n    command = RegisterCommand(...)\n    mock_db = Mock()\n    mock_emailer = Mock()\n    \n    execute_registration(command, mock_db, mock_emailer)\n    \n    mock_db.insert_user.assert_called_once()\n    mock_emailer.send_welcome.assert_called_once()\n```\n\n**Key benefits:**\n- **Decision logic is pure** \u2014 fast, deterministic, no mocks needed\n- **Effects are isolated** \u2014 inject dependencies, test separately  \n- **Easy to verify correctness** \u2014 \"given this input, should we create this command?\"\n- **Side effects are testable with mocks** \u2014 verify *that* effects happen, not all the details"
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "Let me check what files exist in the current directory:\n\nThe directory is empty. Since you've provid...",
+        "response_full": "Let me check what files exist in the current directory:\n\nThe directory is empty. Since you've provided the skill guidance and mentioned that \"our `register_user` function is proving brittle,\" I'll provide the complete refactored design for you to implement.\n\n## Refactored `register_user` - Functional Core, Imperative Shell\n\n**Pure Core (Business Logic):**\n```typescript\n// core.ts - Pure functions, zero side effects, fully testable\ninterface UserRegistrationDecision {\n  isValid: boolean;\n  errors: string[];\n  userToCreate?: {\n    email: string;\n    passwordHash: string;\n    username: string;\n  };\n  shouldSendWelcomeEmail: boolean;\n}\n\nexport function validateRegistration(\n  email: string,\n  password: string,\n  username: string\n): { isValid: boolean; errors: string[] } {\n  const errors: string[] = [];\n  if (!email.includes('@')) errors.push('Invalid email');\n  if (password.length < 8) errors.push('Password too short');\n  if (username.length < 3) errors.push('Username too short');\n  return { isValid: errors.length === 0, errors };\n}\n\nexport function makeRegistrationDecision(\n  email: string,\n  password: string,\n  username: string,\n  existingEmails: string[]\n): UserRegistrationDecision {\n  const validation = validateRegistration(email, password, username);\n  \n  if (!validation.isValid) {\n    return { isValid: false, errors: validation.errors, shouldSendWelcomeEmail: false };\n  }\n  \n  if (existingEmails.includes(email)) {\n    return { \n      isValid: false, \n      errors: ['Email already registered'],\n      shouldSendWelcomeEmail: false \n    };\n  }\n\n  return {\n    isValid: true,\n    errors: [],\n    userToCreate: { email, username, passwordHash: password }, // placeholder\n    shouldSendWelcomeEmail: true\n  };\n}\n```\n\n**Imperative Shell (Coordinates Effects):**\n```typescript\n// shell.ts - Orchestrates IO and side effects\nimport bcrypt from 'bcrypt';\nimport { database } from './db';\nimport { emailService } from './email';\nimport { makeRegistrationDecision } from './core';\n\nexport async function register_user(\n  email: string,\n  password: string,\n  username: string\n): Promise<{ success: boolean; message: string; userId?: string }> {\n  // Load data from external sources\n  const existingEmails = await database.getRegisteredEmails();\n  \n  // Call pure decision logic\n  const decision = makeRegistrationDecision(email, password, username, existingEmails);\n  \n  if (!decision.isValid) {\n    return { success: false, message: decision.errors.join(', ') };\n  }\n\n  // Hash password (side effect)\n  const passwordHash = await bcrypt.hash(password, 10);\n  \n  // Save to database\n  const userId = await database.createUser({\n    email,\n    username,\n    passwordHash\n  });\n\n  // Send welcome email if needed\n  if (decision.shouldSendWelcomeEmail) {\n    await emailService.sendWelcomeEmail(email, username);\n  }\n\n  return { success: true, message: 'User registered', userId };\n}\n```\n\n**Pure Tests (No Mocks, No Database):**\n```typescript\ndescribe('Core - makeRegistrationDecision', () => {\n  it('rejects invalid email', () => {\n    const decision = makeRegistrationDecision('invalid', 'password123', 'user', []);\n    expect(decision.isValid).toBe(false);\n    expect(decision.errors).toContain('Invalid email');\n  });\n\n  it('rejects duplicate email', () => {\n    const decision = makeRegistrationDecision('test@test.com', 'password123', 'user', ['test@test.com']);\n    expect(decision.isValid).toBe(false);\n    expect(decision.errors).toContain('Email already registered');\n  });\n\n  it('accepts valid registration and decides to email', () => {\n    const decision = makeRegistrationDecision('new@test.com', 'password123', 'john', []);\n    expect(decision.isValid).toBe(true);\n    expect(decision.shouldSendWelcomeEmail).toBe(true);\n  });\n});\n```\n\n**Key Benefits:**\n- **Core logic tested without database/email**: `makeRegistrationDecision` is deterministic and pure\n- **Clear separation**: Business decisions isolated from effects\n- **Reusable**: Core logic can be called from CLI, API, or batch jobs\n- **Mockable shell only**: If testing the full flow, mock only `database` and `emailService`, not the decisions"
+      }
+    },
+    {
+      "name": "side_effect_audit",
+      "input": "Analyze this function:\n\n```javascript\nfunction checkAccess(user) {\n  if (user.isBanned) {\n    auditLogger.log(`Banned access attempt: ${user.id}`);\n    return false;\n  }\n  return true;\n}\n```\n\nIs this function easy to test in parallel? Why or why not?",
+      "expected": {
+        "focus": "Does the answer identify the external logger call as a side effect that complicates testing?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "No, this function is **not easy to test in parallel**.\n\n**Why:**\n\n1. **Global dependency**: The func...",
+        "response_full": "No, this function is **not easy to test in parallel**.\n\n**Why:**\n\n1. **Global dependency**: The function relies on `auditLogger`, which is a global/external singleton. When tests run in parallel, they all share the same logger instance.\n\n2. **Shared state interference**: Parallel tests would pollute each other's logs. One test's `Banned access attempt` log entry could be read/verified by another test, causing non-deterministic test results and false failures.\n\n3. **Unpredictable ordering**: The order of log entries becomes indeterminate when tests run concurrently, making it impossible to reliably assert what was logged.\n\n4. **Difficult isolation**: Without mocking/injecting the logger, there's no clean way to isolate the logging side effect per test.\n\n**To make it testable in parallel**, inject the logger as a dependency parameter instead of using a global, allowing each test to provide a mock or spy logger."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "No, this function is **not easy to test in parallel** because it has a side effect (the `auditLogger...",
+        "response_full": "No, this function is **not easy to test in parallel** because it has a side effect (the `auditLogger.log()` call). Parallel tests executing this function would need to coordinate mocking the shared `auditLogger`, creating race conditions and test interdependencies. The function violates the Functional Core principle by mixing pure business logic (access check) with imperative effects (logging).\n\n**Better approach** (following the pattern):\n\n```javascript\n// PURE CORE - testable in parallel, no mocks needed\nfunction checkAccess(user) {\n  return !user.isBanned;\n}\n\n// IMPERATIVE SHELL - coordinates effects\nfunction processAccessRequest(user) {\n  const isAllowed = checkAccess(user);\n  \n  if (!isAllowed) {\n    auditLogger.log(`Banned access attempt: ${user.id}`);\n  }\n  \n  return isAllowed;\n}\n```\n\nNow `checkAccess()` is pure, deterministic, and thousands of tests can run it in parallel without interference. The shell handles the logging side effect."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution A has solid structure but critically places `hash_password()` and `generate_id()` in the pure core\u2014these are non-deterministic operations that violate purity. Solution B correctly recognizes that hashing must live in the imperative shell since bcrypt is non-deterministic; it keeps the core purely deterministic with proper validation logic. Solution B also provides better type safety (TypeScript interfaces) and demonstrates deeper understanding of what 'pure' actually means in practice."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

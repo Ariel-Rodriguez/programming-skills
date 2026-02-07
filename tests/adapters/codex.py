@@ -44,7 +44,7 @@ class CodexCLIAdapter:
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                timeout=300,
+                timeout=600,
             )
 
             if result.returncode != 0:
@@ -60,8 +60,8 @@ class CodexCLIAdapter:
 
         except subprocess.TimeoutExpired:
             return Failure(
-                "Codex CLI timeout after 300 seconds",
-                {"timeout": 300},
+                "Codex CLI timeout after 600 seconds",
+                {"timeout": 600},
             )
         except FileNotFoundError:
             return Failure(
@@ -82,7 +82,7 @@ class CodexCLIAdapter:
             result = subprocess.run(
                 ["codex", "--version"],
                 capture_output=True,
-                timeout=5,
+                timeout=10,
             )
             return result.returncode == 0
         except Exception:

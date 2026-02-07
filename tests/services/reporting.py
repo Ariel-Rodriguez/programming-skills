@@ -297,6 +297,7 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
         "skill": result.skill_name,
         "severity": result.severity.value,
         "model": result.model,
+        "skill_version": result.skill_version,
         "baseline_rate": result.baseline_pass_rate,
         "skill_rate": result.skill_pass_rate,
         "baseline_rating": result.baseline_rating,
@@ -304,9 +305,12 @@ def _serialize_evaluation_result(result: EvaluationResult) -> dict:
         "baseline_pass_count": result.baseline_pass_count,
         "skill_pass_count": result.skill_pass_count,
         "improvement": result.improvement,
+        "judge_error": result.judge_error,
         "results": [
             {
                 "name": baseline.test_name,
+                "input": baseline.input,
+                "expected": baseline.expected,
                 "baseline": {
                     "pass": baseline.passed,
                     "response_preview": baseline.response_preview,

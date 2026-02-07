@@ -46,7 +46,7 @@ def discover_skills(skills_dir: Path, fs: FileSystemPort) -> tuple[Skill, ...]:
         content = result.value
         
         # Parse frontmatter (pure function)
-        description, severity = parse_skill_frontmatter(content)
+        description, severity, version = parse_skill_frontmatter(content)
         
         # Fallback to content extraction if no frontmatter
         if not description:
@@ -58,7 +58,8 @@ def discover_skills(skills_dir: Path, fs: FileSystemPort) -> tuple[Skill, ...]:
             path=item,
             description=description,
             content=content,
-            severity=severity
+            severity=severity,
+            version=version
         ))
     
     # Return sorted immutable tuple

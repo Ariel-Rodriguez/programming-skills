@@ -9,9 +9,9 @@ import re
 from .types import Severity
 
 
-def parse_skill_frontmatter(content: str) -> tuple[str, Severity]:
+def parse_skill_frontmatter(content: str) -> tuple[str, Severity, str]:
     """
-    Extract description and severity from YAML frontmatter.
+    Extract description, severity and version from YAML frontmatter.
     
     Pure function - deterministic, no IO.
     Policy-Mechanism Separation: Parsing logic separated from file reading.
@@ -24,13 +24,14 @@ def parse_skill_frontmatter(content: str) -> tuple[str, Severity]:
     """
     description = ""
     severity = Severity.SUGGEST
+    version = "1.0.0"
     
     if not content.startswith("---"):
-        return description, severity
+        return description, severity, version
     
     frontmatter_match = re.search(r'^---\n(.*?)\n---', content, re.DOTALL)
     if not frontmatter_match:
-        return description, severity
+        return description, severity, version
     
     frontmatter = frontmatter_match.group(1)
     
@@ -47,8 +48,13 @@ def parse_skill_frontmatter(content: str) -> tuple[str, Severity]:
         except ValueError:
             # Default to SUGGEST if invalid severity
             severity = Severity.SUGGEST
+            
+    # Extract version
+    ver_match = re.search(r'version:\s*["\']?([\d\.]+)["\']?\s*\n', frontmatter)
+    if ver_match:
+        version = ver_match.group(1)
     
-    return description, severity
+    return description, severity, version
 
 
 def extract_description_from_content(content: str) -> str:

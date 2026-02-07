@@ -1,0 +1,61 @@
+{
+  "skill": "ps-explicit-state-invariants",
+  "severity": "BLOCK",
+  "model": "claude-haiku-4.5",
+  "skill_version": "1.0.0",
+  "baseline_rate": 100,
+  "skill_rate": 100,
+  "baseline_rating": "good",
+  "skill_rating": "outstanding",
+  "baseline_pass_count": "2/2",
+  "skill_pass_count": "2/2",
+  "improvement": 0,
+  "judge_error": false,
+  "results": [
+    {
+      "name": "ui_state_flags_bug",
+      "input": "Our UI component tracks data loading with three separate flags: `isLoading`, `isSuccess`, and `isError`. \n\nWe keep receiving bug reports where the \"Loading...\" spinner is visible *on top of* the Error message (isLoading=true, isError=true). \n\nRedesign the state structure to make this UI bug impossible to represent in data.",
+      "expected": {
+        "focus": "Does the solution combine the flags into a single status field or union type?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Redesigned State Structure\n\nReplace three separate boolean flags with a **discriminated union** th...",
+        "response_full": "# Redesigned State Structure\n\nReplace three separate boolean flags with a **discriminated union** that enforces only one state at a time:\n\n```typescript\ntype LoadingState = \n  | { status: 'idle' }\n  | { status: 'loading' }\n  | { status: 'success'; data: T }\n  | { status: 'error'; error: Error };\n```\n\nOr as a simple enum if you don't need to attach data:\n\n```typescript\nenum UIState {\n  IDLE = 'idle',\n  LOADING = 'loading',\n  SUCCESS = 'success',\n  ERROR = 'error'\n}\n```\n\n## Why This Works\n\n- **Mutually exclusive**: Only one state can exist at a time; impossible to have `loading=true` and `error=true` simultaneously\n- **Type-safe**: TypeScript prevents invalid state combinations at compile time\n- **Self-documenting**: The state structure clearly shows all valid transitions\n- **Simpler logic**: Conditionals use single value instead of checking multiple flags:\n\n```typescript\n// Before (buggy)\n{isLoading && <Spinner />}\n{isError && <ErrorMessage />}\n\n// After (correct)\n{state.status === 'loading' && <Spinner />}\n{state.status === 'error' && <ErrorMessage error={state.error} />}\n```\n\nThis pattern prevents the visual bug entirely\u2014the compiler won't let you write invalid state transitions."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "## Redesigned State Structure\n\nReplace the three independent boolean flags with a **discriminated un...",
+        "response_full": "## Redesigned State Structure\n\nReplace the three independent boolean flags with a **discriminated union** that represents mutually exclusive states:\n\n```typescript\ntype DataLoadingState = \n  | { status: 'idle' }\n  | { status: 'loading' }\n  | { status: 'success'; data: unknown }\n  | { status: 'error'; error: string }\n\n// Invariant: Exactly ONE status at a time\n// Cannot be both 'loading' AND 'error' simultaneously\n// Data only exists when status is 'success'\n// Error message only exists when status is 'error'\n```\n\n**Usage in component:**\n\n```typescript\nfunction MyComponent({ state }: { state: DataLoadingState }) {\n  switch (state.status) {\n    case 'idle':\n      return <button onClick={load}>Load Data</button>\n    case 'loading':\n      return <div>Loading...</div>\n    case 'success':\n      return <div>{state.data}</div>\n    case 'error':\n      return <div className=\"error\">{state.error}</div>\n  }\n}\n```\n\n**State transitions (explicit functions):**\n\n```typescript\nconst transitions = {\n  startLoading: (): DataLoadingState => ({ status: 'loading' }),\n  succeed: (data: unknown): DataLoadingState => ({ status: 'success', data }),\n  fail: (error: string): DataLoadingState => ({ status: 'error', error }),\n  reset: (): DataLoadingState => ({ status: 'idle' }),\n}\n```\n\n**Why this eliminates the bug:**\n\nThe union type makes `{ status: 'loading', error: '...' }` a **compile-time error**. The impossible state cannot exist in the type system. The spinner and error message can never render simultaneously because TypeScript enforces that only one state property can be true at any moment."
+      }
+    },
+    {
+      "name": "wizard_step_dependency",
+      "input": "We are building a checkout wizard. Step 2 (Shipping) requires the address from Step 1 (Contact). Step 3 (Payment) requires the shipping method from Step 2.\n\nCurrently, developers often try to render the Payment screen with an empty address, causing a crash. \n\nDefine a data structure for this wizard that enforces these dependencies. It should be a compile-time (or runtime structure) error to try to access Payment info if Shipping info doesn't exist.",
+      "expected": {
+        "focus": "Does the data structure nest the steps or use a state machine logic to prevent out-of-order execution?"
+      },
+      "baseline": {
+        "pass": true,
+        "response_preview": "# Type-Safe Checkout Wizard with Enforced Dependencies\n\nHere's a TypeScript solution using **discrim...",
+        "response_full": "# Type-Safe Checkout Wizard with Enforced Dependencies\n\nHere's a TypeScript solution using **discriminated unions** that makes it a compile-time error to access Payment data without Shipping data:\n\n```typescript\n// Step 1: Contact Information\ninterface ContactInfo {\n  name: string;\n  email: string;\n  address: string;\n}\n\n// Step 2: Shipping Information (requires ContactInfo)\ninterface ShippingInfo {\n  method: 'standard' | 'express' | 'overnight';\n  cost: number;\n  estimatedDays: number;\n}\n\n// Step 3: Payment Information (requires ShippingInfo)\ninterface PaymentInfo {\n  cardNumber: string;\n  cvv: string;\n  total: number; // Includes shipping cost\n}\n\n// Discriminated union - only one state at a time\ntype CheckoutState =\n  | { step: 'contact' }\n  | { step: 'shipping'; contact: ContactInfo }\n  | { step: 'payment'; contact: ContactInfo; shipping: ShippingInfo }\n  | { step: 'complete'; contact: ContactInfo; shipping: ShippingInfo; payment: PaymentInfo };\n\n// Type-safe wizard class\nclass CheckoutWizard {\n  private state: CheckoutState = { step: 'contact' };\n\n  // Only accessible on contact step\n  setContact(contact: ContactInfo): void {\n    if (this.state.step !== 'contact') throw new Error('Cannot set contact after step 1');\n    this.state = { step: 'shipping', contact };\n  }\n\n  // Requires contact to exist (type-safe)\n  getContact(): ContactInfo | undefined {\n    if (this.state.step === 'contact') return undefined;\n    return this.state.contact;\n  }\n\n  // Only accessible on shipping step\n  setShipping(shipping: ShippingInfo): void {\n    if (this.state.step !== 'shipping') throw new Error('Shipping step requires contact info');\n    this.state = { step: 'payment', contact: this.state.contact, shipping };\n  }\n\n  // Compile-time error if you try to access without shipping\n  getShipping(): ShippingInfo | undefined {\n    if (this.state.step === 'contact' || this.state.step === 'shipping') return undefined;\n    return this.state.shipping;\n  }\n\n  // Compile-time error: can't access without shipping\n  setPayment(payment: PaymentInfo): void {\n    if (this.state.step !== 'payment') {\n      throw new Error('Payment requires shipping info');\n    }\n    this.state = { step: 'complete', ...this.state, payment };\n  }\n\n  // Only returns if payment step reached\n  getPayment(): PaymentInfo | undefined {\n    if (this.state.step !== 'complete') return undefined;\n    return this.state.payment;\n  }\n\n  getCurrentStep(): CheckoutState['step'] {\n    return this.state.step;\n  }\n}\n\n// Usage - TypeScript enforces the flow:\nconst wizard = new CheckoutWizard();\nconst contact = { name: 'John', email: 'john@example.com', address: '123 Main St' };\nwizard.setContact(contact);\n\n// \u274c TypeScript ERROR - wizard.getPayment() returns undefined\n// Cannot read property 'cardNumber' of undefined\n// const payment = wizard.getPayment()?.cardNumber;\n\n// \u2705 Correct flow\nconst shipping = { method: 'express' as const, cost: 15, estimatedDays: 2 };\nwizard.setShipping(shipping);\n\nconst payment = { cardNumber: '4111...', cvv: '123', total: 115 };\nwizard.setPayment(payment);\n\n// \u2705 Now accessible\nconsole.log(wizard.getPayment()?.cardNumber);\n```\n\n**Key Benefits:**\n\n1. **Compile-time safety**: TypeScript prevents accessing `payment` if `shipping` hasn't been set\n2. **Impossible invalid states**: The union type makes it impossible to have Payment without Shipping without Contact\n3. **Self-documenting**: The type definition clearly shows dependencies\n4. **No runtime crash**: Invalid transitions throw explicit errors before rendering\n\nThis ensures developers can't accidentally render the Payment screen without completing prior steps\u2014the type system catches the error before code runs."
+      },
+      "skill": {
+        "pass": true,
+        "response_preview": "# Checkout Wizard: Explicit State Structure\n\nDefine the wizard state using a **discriminated union**...",
+        "response_full": "# Checkout Wizard: Explicit State Structure\n\nDefine the wizard state using a **discriminated union** that makes invalid states unrepresentable:\n\n```typescript\n// Invariant: Each step's data includes ALL required dependencies\n\ntype CheckoutWizard = \n  | { status: 'step1'; contactData?: undefined }\n  | { status: 'step2'; contactData: ContactInfo; shippingData?: undefined }\n  | { status: 'step3'; contactData: ContactInfo; shippingData: ShippingInfo; paymentData?: undefined }\n  | { status: 'complete'; contactData: ContactInfo; shippingData: ShippingInfo; paymentData: PaymentInfo }\n\ninterface ContactInfo {\n  email: string;\n  address: string; // Step 2 REQUIRES this\n}\n\ninterface ShippingInfo {\n  method: 'standard' | 'express'; // Step 3 REQUIRES this\n  cost: number;\n}\n\ninterface PaymentInfo {\n  cardToken: string;\n  amount: number;\n}\n\n// Transitions enforce invariants\nfunction advanceToStep2(state: CheckoutWizard, contact: ContactInfo): CheckoutWizard {\n  if (state.status !== 'step1') throw new Error('Invalid transition');\n  return { status: 'step2', contactData: contact };\n}\n\nfunction advanceToStep3(state: CheckoutWizard, shipping: ShippingInfo): CheckoutWizard {\n  if (state.status !== 'step2') throw new Error('Invalid transition');\n  // contactData is guaranteed to exist here by the type system\n  return { status: 'step3', contactData: state.contactData, shippingData: shipping };\n}\n\nfunction renderPayment(state: CheckoutWizard): void {\n  if (state.status !== 'step3') throw new Error('Payment requires completed shipping');\n  // Compiler knows both contactData AND shippingData exist - no crash possible\n  console.log(`Address: ${state.contactData.address}, Method: ${state.shippingData.method}`);\n}\n```\n\n**Why this works:**\n\n- \u2705 **Type-safe**: Accessing `state.shippingData` on step2 is a compile error\n- \u2705 **Invalid states impossible**: Can't represent \"Payment step without Shipping data\"\n- \u2705 **Dependencies encoded**: Step 3 state type literally includes all prior data\n- \u2705 **No defensive checks**: No `if (shippingData !== null)` guards needed\u2014types guarantee it exists in step3\n\nThe crash is **impossible by design**, not prevented by runtime guards."
+      }
+    }
+  ],
+  "judgment": {
+    "principle_better": "B",
+    "quality_better": "B",
+    "overall_better": "B",
+    "option_a_rating": "good",
+    "option_b_rating": "outstanding",
+    "score": 100,
+    "reasoning": "Solution B explicitly states invariants in comments and fully encodes them in the type system by including all required prior data in each state variant (e.g., step3 includes contactData AND shippingData), making invalid states truly unrepresentable. Solution A correctly uses discriminated unions but weakens type-safety by having getters return undefined, requiring runtime checks and type narrowing that Solution B's approach eliminates entirely."
+  },
+  "timestamp": "2026-02-07T23:51:50",
+  "provider": "copilot"
+}

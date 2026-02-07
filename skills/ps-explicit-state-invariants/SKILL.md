@@ -2,6 +2,7 @@
 name: ps-explicit-state-invariants
 description: Ensures state is intentionally designed with explicit invariants. Use when reviewing stateful code, designing data models, or refactoring boolean flag explosions. Prevents impossible states and race conditions.
 severity: BLOCK
+version: 1.0.0
 ---
 
 # Explicit State & Invariants
